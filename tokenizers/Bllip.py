@@ -52,8 +52,18 @@ class Bllip(BaseTokenizer):
         # Returns
             A JSON string containing the tokenizer configuration.
         """
-        with open(join(self.cache_folder, self.name+".json"), "w") as f:
+        if 'path' in kwargs:
+            path = kwargs.pop('path')
+        else:
+            path = join(self.cache_folder, self.name+".json")
+        with open(path, "w") as f:
             json.dump(self.get_config(), f)
+
+    @staticmethod
+    def load_from_json(path):
+        with open(path, "r") as f:
+            t_config = json.load(f)
+            return Bllip(**t_config)
 
     @staticmethod
     def maybe_load(cache_folder, prefix_name, stem, **kwargs):
@@ -63,8 +73,6 @@ class Bllip(BaseTokenizer):
         path = join(cache_folder, name)
         if exists(path):
             print("[LOAD FROM CACHE] Load regex tokenizer from", path)
-            with open(path, "r") as f:
-                t_config = json.load(f)
-                return Bllip(**t_config)
+            return Bllip.load_from_json(path)
 
-        return Bllip(stem, cache_folder=cache_folder, prefix_name=prefix_name)
+        return Bllip(stem, cache_folder=cache_folder, prefix_name=prefix_name, **kwargs)

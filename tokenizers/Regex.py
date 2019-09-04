@@ -75,4 +75,4 @@ class Regex(BaseTokenizer):
             print("[LOAD FROM CACHE] Load regex tokenizer from", path)
             return Regex.load_from_json(path)
 
-        return Regex(stem, cache_folder=cache_folder, prefix_name=prefix_name)
+        return Regex(stem, cache_folder=cache_folder, prefix_name=prefix_name, **kwargs)
