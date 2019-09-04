@@ -8,11 +8,26 @@ from collections import defaultdict
 import tempfile
 import shutil
 import json
-import pickle
 import os
 from multiprocessing import Process
 import gc
 import sys
+
+
+def fitTokenizeJob(proc_id, articles, _class, cache_folder, prefix_name, merge_tokenizer_path):
+    print("[Process-{}] Started".format(proc_id))
+    sys.stdout.flush()
+    # ALL THREADS RUN THIS
+    tk = _class(cache_folder=cache_folder, prefix_name=prefix_name)
+    tk.fit_on_texts(articles)
+    del articles
+
+    file_name = "tk_{0:03}.p".format(proc_id)
+    print("[Process-{}]: Store {}".format(proc_id, file_name))
+
+    tk.save_to_json(path=os.path.join(merge_tokenizer_path, file_name))
+    del tk
+    print("[Process-{}] Ended".format(proc_id))
 
 
 class BaseTokenizer:
@@ -50,13 +65,16 @@ class BaseTokenizer:
                  n_process=4,
                  **kwargs):
 
-        if kwargs:
-            raise TypeError('Unrecognized keyword arguments: ' + str(kwargs))
-
         self.prefix_name = prefix_name
         self.cache_folder = cache_folder
-        self.word_counts = OrderedDict()
-        self.word_docs = defaultdict(int)
+        if 'word_counts' in kwargs:
+            self.word_counts = json.loads(kwargs.pop('word_counts'))
+        else:
+            self.word_counts = OrderedDict()
+        if 'word_docs' in kwargs:
+            self.word_docs = json.loads(kwargs.pop('word_docs'))
+        else:
+            self.word_docs = defaultdict(int)
         self.filters = filters
         self.split = split
         self.lower = lower
@@ -64,10 +82,24 @@ class BaseTokenizer:
         self.document_count = document_count
         self.char_level = char_level
         self.oov_token = oov_token
-        self.index_docs = defaultdict(int)
-        self.word_index = dict()
-        self.index_word = dict()
+        if 'index_docs' in kwargs:
+            self.index_docs = json.loads(kwargs.pop('index_docs'))
+            self.index_docs = {int(k): v for k, v in self.index_docs.items()}
+        else:
+            self.index_docs = defaultdict(int)
+        if 'word_index' in kwargs:
+            self.word_index = json.loads(kwargs.pop('word_index'))
+        else:
+            self.word_index = dict()
+        if 'index_word' in kwargs:
+            self.index_word = json.loads(kwargs.pop('index_word'))
+            self.index_word = {int(k): v for k, v in self.index_word.items()}
+        else:
+            self.index_word = dict()
         self.n_process = n_process
+
+        if kwargs:
+            raise TypeError('Unrecognized keyword arguments: ' + str(kwargs))
 
     def tokenizer(self, text):
         raise NotImplementedError("The function tokenizer must be implemented by a subclass")
@@ -232,7 +264,7 @@ class BaseTokenizer:
             yield vect
 
     def is_trained(self):
-        return self.num_words is not None
+        return len(self.word_counts) > 0
 
     def get_config(self):
         '''Returns the tokenizer configuration as Python dictionary.
@@ -277,24 +309,9 @@ class BaseTokenizer:
         merge_tokenizer_path = tempfile.mkdtemp()
 
         try:
-            def fitTokenizeJob(proc_id, articles):
-                print("[Process-{}] Started".format(proc_id))
-                sys.stdout.flush()
-                # ALL THREADS RUN THIS
-                tk = self.__class__(cache_folder=self.cache_folder, prefix_name=self.prefix_name)
-                tk.fit_on_texts(articles)
-                del articles
-
-                file_name = "tk_{0:03}.p".format(proc_id)
-                print("[Process-{}]: Store {}".format(proc_id, file_name))
-
-                tk.save_to_json(path=os.path.join(merge_tokenizer_path, file_name))
-                del tk
-                print("[Process-{}] Ended".format(proc_id))
-
             # initialization of the process
             def fitTokenizer_process_init(proc_id, articles):
-                return Process(target=fitTokenizeJob, args=(proc_id, articles,))
+                return Process(target=fitTokenizeJob, args=(proc_id, articles, self.__class__, self.cache_folder, self.prefix_name, merge_tokenizer_path))
 
             # multiprocess loop
             for i, texts in enumerate(corpora_generator()):
@@ -303,7 +320,7 @@ class BaseTokenizer:
                 t_len = len(texts)
                 t_itter = t_len//self.n_process
 
-                for k,j in enumerate(range(0,t_len, t_itter)):
+                for k,j in enumerate(range(0, t_len, t_itter)):
                     process.append(fitTokenizer_process_init(self.n_process*i+k, texts[j:j+t_itter]))
                 print(process)
                 print("[MULTIPROCESS LOOP] Starting", self.n_process, "process")
@@ -359,9 +376,8 @@ class BaseTokenizer:
                 # Saving tokenizer
                 self.save_to_json()
         except Exception as e:
-            #print(e)
             raise e
         finally:
             # always remove the temp directory
             print("remove", merge_tokenizer_path)
-            # shutil.rmtree(merge_tokenizer_path)
+            shutil.rmtree(merge_tokenizer_path)
