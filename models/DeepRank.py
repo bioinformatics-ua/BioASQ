@@ -4,10 +4,11 @@ from os.path import exists, join
 
 
 class DeepRank(ModelAPI):
-    def __init__(self, prefix_name, cache_folder, top_k, tokenizer, **kwargs):
+    def __init__(self, prefix_name, cache_folder, logging, top_k, tokenizer, **kwargs):
         self.top_k = top_k
         self.cache_folder = cache_folder
         self.prefix_name = prefix_name
+        self.logging = logging
 
         name, attributes = list(tokenizer.items())[0]
         _class = dynamicly_class_load("tokenizers."+name, name)
@@ -19,7 +20,7 @@ class DeepRank(ModelAPI):
         # use elastic search API instead to query the m_instance
         return exists(join(self.cache_folder, self.name))
 
-    def train(self, simulation=False):
+    def train(self, simulation=False, **kwargs):
         steps = []
         model_output = None
 
@@ -43,3 +44,6 @@ class DeepRank(ModelAPI):
             return steps
         else:
             return model_output
+
+    def inference(self, simulation=False, **kwargs):
+        return []

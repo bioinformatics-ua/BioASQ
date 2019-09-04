@@ -320,9 +320,9 @@ class BaseTokenizer:
                 t_len = len(texts)
                 t_itter = t_len//self.n_process
 
-                for k,j in enumerate(range(0, t_len, t_itter)):
+                for k, j in enumerate(range(0, t_len, t_itter)):
                     process.append(fitTokenizer_process_init(self.n_process*i+k, texts[j:j+t_itter]))
-                print(process)
+
                 print("[MULTIPROCESS LOOP] Starting", self.n_process, "process")
                 for p in process:
                     p.start()

@@ -1,6 +1,6 @@
 from utils import yaml_loader, json_loader, dynamicly_class_load
 from dataset.dataset import Corpora, Queries
-from os.path import exists
+from os.path import exists, join
 
 
 class Pipeline:
@@ -22,8 +22,8 @@ class Pipeline:
         # check important parameters in the config (TODO validation and error checking)
         print("[CONFIG FILE] cache_folder path:", "OK" if exists(self.config["cache_folder"]) else "FAIL")
         print("[CONFIG FILE] doc_repository folder path:", "OK" if exists(self.config["corpora"]["folder"]) else "FAIL")
-        print("[CONFIG FILE] queires train path file:", "OK" if exists(self.config["queries"]["folder"]+"_train.json") else "FAIL")
-        print("[CONFIG FILE] queires validation path file:", "OK" if exists(self.config["queries"]["folder"]+"_validation.json") else "FAIL")
+        print("[CONFIG FILE] queires train path file:", "OK" if exists(join(self.config["queries"]["folder"], "train.json")) else "FAIL")
+        print("[CONFIG FILE] queires validation path file:", "OK" if exists(join(self.config["queries"]["folder"], "validation.json")) else "FAIL")
 
         # setup documents repository
         self.corpora = Corpora(logging=self.logging, **self.config["corpora"])
@@ -36,12 +36,11 @@ class Pipeline:
         for module in self.config["pipeline"]:
             name, attributes = list(module.items())[0]
             _class = dynamicly_class_load("models."+name, name)
-            m_instance = _class(cache_folder=self.config["cache_folder"], prefix_name=self.corpora.name, **attributes)
+            m_instance = _class(cache_folder=self.config["cache_folder"], prefix_name=self.corpora.name, logging=self.logging, **attributes)
             m_instance.build()
             self.modules.append(m_instance)
 
     def train(self):
-
         # first module input is always the corpora plus training queires
         next_module_input = {"corpora": self.corpora, "queries": self.queries}
         for module in self.modules:
@@ -51,6 +50,7 @@ class Pipeline:
         steps = []
         for module in self.modules:
             steps.extend(module.train(simulation=True))
+            steps.extend(module.inference(simulation=True))
         self.__print_routine(steps)
 
     def check_inference_routine(self):
