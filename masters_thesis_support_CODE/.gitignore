@@ -3,7 +3,6 @@
 
 *.xml
 data/*
-models/*model*
 nohup.out
 **.hdf5
 **.npy

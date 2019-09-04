@@ -3,7 +3,7 @@ from utils import dynamicly_class_load
 from os.path import exists, join
 
 
-class BM25(ModelAPI):
+class BM25_ES(ModelAPI):
     def __init__(self, prefix_name, cache_folder, top_k, tokenizer):
         self.top_k = top_k
         self.cache_folder = cache_folder
@@ -19,10 +19,20 @@ class BM25(ModelAPI):
         # use elastic search API instead to query the m_instance
         return exists(join(self.cache_folder, self.name))
 
-    def train(self, simulation=False):
+    def train(self, simulation=False, **kwargs):
         steps = []
         model_output = None
 
+        if "corpora" in kwargs:
+            corpora = kwargs.pop("corpora")
+
+        if "queries" in kwargs:
+            queries = kwargs.pop("queries")
+
+        if kwargs:
+            raise TypeError('Unrecognized keyword arguments: ' + str(kwargs))
+
+        # Start train routine
         if not self.tokenizer.is_trained():
             steps.append("[MISS] Tokenizer for the BM25")
             if not simulation:
