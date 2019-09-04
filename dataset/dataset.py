@@ -12,7 +12,7 @@ class Corpora:
         self.logging = logging
         self.files_are_compressed = files_are_compressed
 
-    def read_documents_generator(self):
+    def read_documents_generator(self, mapping=None):
         """
         creates a generator to read the document collection
         """
@@ -30,6 +30,8 @@ class Corpora:
                     f = tar.extractfile(m)
                     articles = json.load(reader(f))
                     self.logging.info("[CORPORA] Returning:", len(articles), "articles")
+                    if mapping is not None:
+                        articles = list(map(mapping, articles))
                     yield articles
                     f.close()
                     del f
@@ -51,8 +53,8 @@ class Queries:
         self.__load()
 
     def __load(self):
-        with open(join(self.folder_rep, "_train.json"), "r") as f:
+        with open(join(self.folder_rep, "train.json"), "r") as f:
             self.train_data.extend(json.load(f))
 
-        with open(join(self.folder_rep, "_validation.json"), "r") as f:
+        with open(join(self.folder_rep, "validation.json"), "r") as f:
             self.validation_data.extend(json.load(f))

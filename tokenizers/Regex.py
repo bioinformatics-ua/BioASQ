@@ -52,19 +52,27 @@ class Regex(BaseTokenizer):
         # Returns
             A JSON string containing the tokenizer configuration.
         """
-        with open(join(self.cache_folder, self.name+".json"), "w") as f:
+        if 'path' in kwargs:
+            path = kwargs.pop('path')
+        else:
+            path = join(self.cache_folder, self.name+".json")
+        with open(path, "w") as f:
             json.dump(self.get_config(), f)
 
     @staticmethod
-    def maybe_load(cache_folder, prefix_name, stem):
+    def load_from_json(path):
+        with open(path, "r") as f:
+            t_config = json.load(f)
+            return Regex(**t_config)
+
+    @staticmethod
+    def maybe_load(cache_folder, prefix_name, stem, **kwargs):
 
         # prefix_name and stem should be in the kwargs
         name = prefix_name + "_" + ("stem_" if stem else "")+"Regex.json"
         path = join(cache_folder, name)
         if exists(path):
             print("[LOAD FROM CACHE] Load regex tokenizer from", path)
-            with open(path, "r") as f:
-                t_config = json.load(f)
-                return Regex(**t_config)
+            return load_from_json(path)
 
         return Regex(stem, cache_folder=cache_folder, prefix_name=prefix_name)

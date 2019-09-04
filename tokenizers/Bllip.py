@@ -56,7 +56,7 @@ class Bllip(BaseTokenizer):
             json.dump(self.get_config(), f)
 
     @staticmethod
-    def maybe_load(cache_folder, prefix_name, stem):
+    def maybe_load(cache_folder, prefix_name, stem, **kwargs):
 
         # prefix_name and stem should be in the kwargs
         name = prefix_name + "_" + ("stem_" if stem else "")+"Bllip.json"

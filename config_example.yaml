@@ -1,11 +1,11 @@
 mode: "train"
-cache_folder: "/path/to/folder"
+cache_folder: "/backup/IR/cache"
 corpora:
     name: "bioasq"
-    folder: "path/to/folder.tar.gz" #corresponds to the tar.gz file
+    folder: "/backup/pubmed_archive_json/pubmed_small.tar.gz" #corresponds to the tar.gz file
     files_are_compressed: true #(optinal) default is false
 queries:
-    folder: "path/to/folder"
+    folder: "/backup/BioASQ-training7b"
 pipeline:
     - BM25_ES:
         top_k: 2500

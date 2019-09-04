@@ -12,6 +12,7 @@ import pickle
 import os
 from multiprocessing import Process
 import gc
+import sys
 
 
 class BaseTokenizer:
@@ -72,7 +73,7 @@ class BaseTokenizer:
         raise NotImplementedError("The function tokenizer must be implemented by a subclass")
 
     @staticmethod
-    def maybe_load(path):
+    def maybe_load(path, **kwargs):
         raise NotImplementedError("The function tokenizer must be implemented by a subclass")
 
     def fit_on_texts(self, texts):
@@ -268,12 +269,17 @@ class BaseTokenizer:
     def save_to_json(self, **kwargs):
         raise NotImplementedError()
 
+    @staticmethod
+    def load_from_json(path):
+        raise NotImplementedError()
+
     def fit_tokenizer_multiprocess(self, corpora_generator):
         merge_tokenizer_path = tempfile.mkdtemp()
 
         try:
             def fitTokenizeJob(proc_id, articles):
                 print("[Process-{}] Started".format(proc_id))
+                sys.stdout.flush()
                 # ALL THREADS RUN THIS
                 tk = self.__class__(cache_folder=self.cache_folder, prefix_name=self.prefix_name)
                 tk.fit_on_texts(articles)
@@ -282,7 +288,7 @@ class BaseTokenizer:
                 file_name = "tk_{0:03}.p".format(proc_id)
                 print("[Process-{}]: Store {}".format(proc_id, file_name))
 
-                pickle.dump(tk, open(os.path.join(merge_tokenizer_path, file_name), "wb"))
+                tk.save_to_json(path=os.path.join(merge_tokenizer_path, file_name))
                 del tk
                 print("[Process-{}] Ended".format(proc_id))
 
@@ -295,16 +301,16 @@ class BaseTokenizer:
                 process = []
 
                 t_len = len(texts)
-                t_itter = t_len//self.n_process[i]
+                t_itter = t_len//self.n_process
 
-                for j in range(t_len, t_itter):
-                    process.append(fitTokenizer_process_init(sum(self.n_process[:i])+j, texts[j:j+t_itter]))
-
-                print("[MULTIPROCESS LOOP] Starting", self.n_process[i], "process")
+                for k,j in enumerate(range(0,t_len, t_itter)):
+                    process.append(fitTokenizer_process_init(self.n_process*i+k, texts[j:j+t_itter]))
+                print(process)
+                print("[MULTIPROCESS LOOP] Starting", self.n_process, "process")
                 for p in process:
                     p.start()
 
-                print("[MULTIPROCESS LOOP] Wait", self.n_process[i], "process")
+                print("[MULTIPROCESS LOOP] Wait", self.n_process, "process")
                 for p in process:
                     p.join()
                 gc.collect()
@@ -314,8 +320,7 @@ class BaseTokenizer:
             files = sorted(os.listdir(merge_tokenizer_path))
 
             for file in files:
-                with open(os.path.join(merge_tokenizer_path, file), "rb") as f:
-                    loaded_tk = pickle.load(f)
+                loaded_tk = self.__class__.load_from_json(path=os.path.join(merge_tokenizer_path, file))
 
                 # manual merge
                 for w, c in loaded_tk.word_counts.items():
@@ -353,8 +358,9 @@ class BaseTokenizer:
 
                 # Saving tokenizer
                 self.save_to_json()
-        except Exception:
-            pass
+        except Exception as e:
+            #print(e)
+            raise e
         finally:
             # always remove the temp directory
             print("remove", merge_tokenizer_path)

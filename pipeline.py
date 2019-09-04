@@ -26,7 +26,7 @@ class Pipeline:
         print("[CONFIG FILE] queires validation path file:", "OK" if exists(self.config["queries"]["folder"]+"_validation.json") else "FAIL")
 
         # setup documents repository
-        self.corpora = Corpora(**self.config["corpora"], logging=self.logging)
+        self.corpora = Corpora(logging=self.logging, **self.config["corpora"])
 
         if self.mode == "train":
             # setup Queries

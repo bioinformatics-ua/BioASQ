@@ -4,10 +4,11 @@ from os.path import exists, join
 
 
 class BM25_ES(ModelAPI):
-    def __init__(self, prefix_name, cache_folder, top_k, tokenizer):
+    def __init__(self, prefix_name, cache_folder, top_k, address, tokenizer):
         self.top_k = top_k
         self.cache_folder = cache_folder
-        self.prefix_name = prefix_name.name
+        self.prefix_name = prefix_name
+        self.address = address
 
         name, attributes = list(tokenizer.items())[0]
         _class = dynamicly_class_load("tokenizers."+name, name)
@@ -38,7 +39,7 @@ class BM25_ES(ModelAPI):
             if not simulation:
                 # code to create tokenizer
                 print("[START] Create tokenizer for BM25")
-                self.tokenizer.fit_tokenizer_multiprocess(corpora.read_documents_generator())
+                self.tokenizer.fit_tokenizer_multiprocess(corpora.read_documents_generator(mapping=lambda x: x["title"]+" "+x["abstract"]))
                 print("[FINISHED] tokenizer for BM25 with", self.tokenizer.num_words, "terms")
 
         else:

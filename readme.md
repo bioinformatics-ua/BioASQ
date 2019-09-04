@@ -53,3 +53,9 @@ pipeline:
                 stem: false
 
 ```
+
+## Run
+
+```sh
+python3 main.py config_example.yaml --train
+```

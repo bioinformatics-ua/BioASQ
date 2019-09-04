@@ -26,3 +26,5 @@ if __name__ == "__main__":
     pipeline.build()
 
     pipeline.check_train_routine()
+
+    pipeline.train()
