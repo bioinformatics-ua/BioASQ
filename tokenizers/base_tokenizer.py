@@ -5,7 +5,13 @@ But the original source code can be found on: https://www.tensorflow.org/version
 
 from collections import OrderedDict
 from collections import defaultdict
+import tempfile
+import shutil
 import json
+import pickle
+import os
+from multiprocessing import Process
+import gc
 
 
 class BaseTokenizer:
@@ -40,6 +46,7 @@ class BaseTokenizer:
                  char_level=False,
                  oov_token=None,
                  document_count=0,
+                 n_process=4,
                  **kwargs):
 
         if kwargs:
@@ -59,6 +66,7 @@ class BaseTokenizer:
         self.index_docs = defaultdict(int)
         self.word_index = dict()
         self.index_word = dict()
+        self.n_process = n_process
 
     def tokenizer(self, text):
         raise NotImplementedError("The function tokenizer must be implemented by a subclass")
@@ -259,3 +267,95 @@ class BaseTokenizer:
 
     def save_to_json(self, **kwargs):
         raise NotImplementedError()
+
+    def fit_tokenizer_multiprocess(self, corpora_generator):
+        merge_tokenizer_path = tempfile.mkdtemp()
+
+        try:
+            def fitTokenizeJob(proc_id, articles):
+                print("[Process-{}] Started".format(proc_id))
+                # ALL THREADS RUN THIS
+                tk = self.__class__(cache_folder=self.cache_folder, prefix_name=self.prefix_name)
+                tk.fit_on_texts(articles)
+                del articles
+
+                file_name = "tk_{0:03}.p".format(proc_id)
+                print("[Process-{}]: Store {}".format(proc_id, file_name))
+
+                pickle.dump(tk, open(os.path.join(merge_tokenizer_path, file_name), "wb"))
+                del tk
+                print("[Process-{}] Ended".format(proc_id))
+
+            # initialization of the process
+            def fitTokenizer_process_init(proc_id, articles):
+                return Process(target=fitTokenizeJob, args=(proc_id, articles,))
+
+            # multiprocess loop
+            for i, texts in enumerate(corpora_generator()):
+                process = []
+
+                t_len = len(texts)
+                t_itter = t_len//self.n_process[i]
+
+                for j in range(t_len, t_itter):
+                    process.append(fitTokenizer_process_init(sum(self.n_process[:i])+j, texts[j:j+t_itter]))
+
+                print("[MULTIPROCESS LOOP] Starting", self.n_process[i], "process")
+                for p in process:
+                    p.start()
+
+                print("[MULTIPROCESS LOOP] Wait", self.n_process[i], "process")
+                for p in process:
+                    p.join()
+                gc.collect()
+
+            # merge the tokenizer
+            print("[TOKENIZER] Merge")
+            files = sorted(os.listdir(merge_tokenizer_path))
+
+            for file in files:
+                with open(os.path.join(merge_tokenizer_path, file), "rb") as f:
+                    loaded_tk = pickle.load(f)
+
+                # manual merge
+                for w, c in loaded_tk.word_counts.items():
+                    if w in self.word_counts:
+                        self.word_counts[w] += c
+                    else:
+                        self.word_counts[w] = c
+
+                for w, c in loaded_tk.word_docs.items():
+                    if w in self.word_docs:
+                        self.word_docs[w] += c
+                    else:
+                        self.word_docs[w] = c
+
+                self.document_count += loaded_tk.document_count
+
+                # CODE FROM KERAS TOKENIZER
+                wcounts = list(self.word_counts.items())
+                wcounts.sort(key=lambda x: x[1], reverse=True)
+                # forcing the oov_token to index 1 if it exists
+                if self.oov_token is None:
+                    sorted_voc = []
+                else:
+                    sorted_voc = [self.oov_token]
+                sorted_voc.extend(wc[0] for wc in wcounts)
+
+                # note that index 0 is reserved, never assigned to an existing word
+                self.word_index = dict(
+                    list(zip(sorted_voc, list(range(1, len(sorted_voc) + 1)))))
+
+                self.index_word = dict((c, w) for w, c in self.word_index.items())
+
+                for w, c in list(self.word_docs.items()):
+                    self.index_docs[self.word_index[w]] = c
+
+                # Saving tokenizer
+                self.save_to_json()
+        except Exception:
+            pass
+        finally:
+            # always remove the temp directory
+            print("remove", merge_tokenizer_path)
+            # shutil.rmtree(merge_tokenizer_path)

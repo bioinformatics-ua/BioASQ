@@ -37,7 +37,10 @@ class BM25_ES(ModelAPI):
             steps.append("[MISS] Tokenizer for the BM25")
             if not simulation:
                 # code to create tokenizer
-                raise NotImplementedError()
+                print("[START] Create tokenizer for BM25")
+                self.tokenizer.fit_tokenizer_multiprocess(corpora.read_documents_generator())
+                print("[FINISHED] tokenizer for BM25 with", self.tokenizer.num_words, "terms")
+
         else:
             steps.append("[READY] Tokenizer for the BM25")
 

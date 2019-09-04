@@ -12,6 +12,7 @@ pipeline:
         address: "http://193.136.175.98:8125"
         tokenizer:
             Regex:
+                n_process: 20
                 stem: true
     - DeepRank:
         top_k: 10
