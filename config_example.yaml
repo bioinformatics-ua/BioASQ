@@ -17,11 +17,14 @@ pipeline:
                 stem: true
     - DeepRank:
         top_k: 10
+        embedding:
+            FastText:
+                trainable: false
+                path: "data\\emb"
         input_network:
             Q: 13 #number max of query tokens
             P: 5 #number max of snippets per query token
             S: 15 #number max of snippet tokens
-            embedding_matrix: "auto" #creates a embedding matrix using fasttext library
         measure_network: "MeasureNetwork" #class name of the measure network
         aggregation_network: "AggregationNetwork" #class name of the aggregation network
         hyperparameters:
