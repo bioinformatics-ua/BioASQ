@@ -15,11 +15,11 @@ import sys
 from logger import log
 
 
-def fitTokenizeJob(proc_id, articles, _class, cache_folder, prefix_name, merge_tokenizer_path):
+def fitTokenizeJob(proc_id, articles, _class, merge_tokenizer_path, properties):
     print("[Process-{}] Started".format(proc_id))
     sys.stdout.flush()
     # ALL THREADS RUN THIS
-    tk = _class(cache_folder=cache_folder, prefix_name=prefix_name)
+    tk = _class(**properties)
     tk.fit_on_texts(articles)
     del articles
 
@@ -312,7 +312,7 @@ class BaseTokenizer:
         try:
             # initialization of the process
             def fitTokenizer_process_init(proc_id, articles):
-                return Process(target=fitTokenizeJob, args=(proc_id, articles, self.__class__, self.cache_folder, self.prefix_name, merge_tokenizer_path))
+                return Process(target=fitTokenizeJob, args=(proc_id, articles, self.__class__, merge_tokenizer_path, self.get_properties()))
 
             # multiprocess loop
             for i, texts in enumerate(corpora_iterator):

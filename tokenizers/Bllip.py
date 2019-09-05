@@ -18,6 +18,9 @@ class Bllip(BaseTokenizer):
         self.st = PorterStemmer() if stem else None
         self.name = self.prefix_name + "_" + ("stem_" if stem else "")+"Bllip"
 
+    def get_properties(self):
+        return {"cache_folder": self.cache_folder, "prefix_name": self.prefix_name, "stem": self.stem}
+
     def tokenizer(self, text, *args, **kwargs):
         tokens = []
         text = text.lower()

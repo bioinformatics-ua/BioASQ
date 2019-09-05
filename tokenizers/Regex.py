@@ -22,6 +22,9 @@ class Regex(BaseTokenizer):
         self.filter_whitespace = lambda x: not x == ""
         self.name = self.prefix_name + "_" + ("stem_" if stem else "")+"Regex"
 
+    def get_properties(self):
+        return {"cache_folder": self.cache_folder, "prefix_name": self.prefix_name, "stem": self.stem}
+
     def tokenizer(self, text, *args, **kwargs):
         text = text.lower()
         text = (text.encode("ascii", "replace").decode("utf-8"))

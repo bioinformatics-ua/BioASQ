@@ -57,5 +57,5 @@ pipeline:
 ## Run
 
 ```sh
-python3 main.py config_example.yaml --train
+python3 main.py config_example.yaml --mode train
 ```
