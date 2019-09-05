@@ -3,14 +3,15 @@ from utils import dynamicly_class_load
 from os.path import exists, join
 from elasticsearch import Elasticsearch, helpers
 import json
+from logger import log
+import pickle
 
 
 class BM25_ES(ModelAPI):
-    def __init__(self, prefix_name, cache_folder, logging, top_k, address, tokenizer):
+    def __init__(self, prefix_name, cache_folder, top_k, address, tokenizer):
         self.top_k = top_k
         self.cache_folder = cache_folder
         self.prefix_name = prefix_name
-        self.logging = logging
         self.es = Elasticsearch([address])
 
         name, attributes = list(tokenizer.items())[0]
@@ -24,7 +25,7 @@ class BM25_ES(ModelAPI):
         return exists(join(self.cache_folder, self.name))
 
     def create_index(self, corpora):
-        exit(1)
+
         # overide pre existent index. TODO change this behaviour
         self.es.indices.delete(index=self.prefix_name, ignore=[400, 404])
 
@@ -55,14 +56,14 @@ class BM25_ES(ModelAPI):
         def data_to_index_generator():
             # TODO: An improvement can be achived by looking at how elasticsearch use custom tokenizers
             index = 0
-            for articles in corpora.read_documents_generator():
+            for articles in corpora.read_documents_iterator():
 
                 # batch tokenize following Keras CODE
                 tokenized_articles = self.tokenizer.texts_to_sequences(map(lambda x: x["title"]+" "+x["abstract"], articles))
 
-                for i in len(articles):
+                for i in range(len(articles)):
                     yield {
-                      "_index": "bioasq",
+                      "_index": self.prefix_name,
                       "id": articles[i]["id"],
                       "text": " ".join(map(lambda x: str(x), tokenized_articles[i])),
                       "original": articles[i]["title"]+" "+articles[i]["abstract"],
@@ -70,18 +71,19 @@ class BM25_ES(ModelAPI):
                     }
                     index += 1
                     if not index % 100000:
-                        self.logging.info("{} documents indexed".format(index))
+                        log.info("{} documents indexed".format(index))
 
         helpers.bulk(self.es, data_to_index_generator(), chunk_size=1000, request_timeout=200)
 
         # save a empty file in cache to indicate that this index alredy exists. TODO use elasticsearch to do this.
-        with open(join(self.cache_folder, self.name)) as f:
+        with open(join(self.cache_folder, self.name), "w") as f:
             json.dump({}, f)
 
     def retrieve_for_queries(self, queries):
         # TODO: Check elasticsearch for batch queries has a way of impriving
         retrieved_results = []
-        for query_data in queries.train:
+        print("[BM25] Runing inference over training data")
+        for i, query_data in enumerate(queries.train_data):
             query = ' '.join(map(lambda x: str(x), self.tokenizer.texts_to_sequences([query_data["query"]])[0]))
             query_es = {'query': {'bool': {'must': [{'query_string': {'query': query, 'analyze_wildcard': True}}], 'filter': [], 'should': [], 'must_not': []}}}
 
@@ -91,18 +93,25 @@ class BM25_ES(ModelAPI):
                                             "original": x['_source']['original'],
                                             "title": x['_source']['title']},
                                  retrieved['hits']['hits']))
-
+            log.info("[BM25] {}-query: {}".format(i, query_data["query_id"]))
             retrieved_results.append({"query_id": query_data["query_id"],
                                       "query": query_data["query"],
                                       "documents": documents})
 
         return retrieved_results
 
-    def train(self, simulation=False, **kwargs):
+    def train(self, **kwargs):
         steps = []
+        model_output = {}
 
         if "corpora" in kwargs:
-            corpora = kwargs.pop("corpora")
+            corpora = kwargs["corpora"]
+            model_output["corpora"] = corpora
+
+        if "simulation" in kwargs:
+            simulation = kwargs["simulation"]
+        else:
+            simulation = False
 
         # Start train routine
         if not self.tokenizer.is_trained():
@@ -110,7 +119,7 @@ class BM25_ES(ModelAPI):
             if not simulation:
                 # code to create tokenizer
                 print("[START] Create tokenizer for BM25")
-                self.tokenizer.fit_tokenizer_multiprocess(corpora.read_documents_generator(mapping=lambda x: x["title"]+" "+x["abstract"]))
+                self.tokenizer.fit_tokenizer_multiprocess(corpora.read_documents_iterator(mapping=lambda x: x["title"]+" "+x["abstract"]))
                 print("[FINISHED] tokenizer for BM25 with", len(self.tokenizer.word_counts), "terms")
         else:
             steps.append("[READY] Tokenizer for the BM25")
@@ -123,22 +132,51 @@ class BM25_ES(ModelAPI):
         else:
             steps.append("[READY] BM25 INDEX")
 
-        return steps
+        # last step is to produce training output for the next module
+        path_cache_output = join(self.cache_folder, self.name+"retrieved_results.p")
+        if not exists(path_cache_output):
+            steps.append("[MISS] BM25 INFERENCE")
+            if not simulation:
+                # run inference
+                retrieved = self.inference(**kwargs)
+                # save
+                log.info("[BM25] Saving the retrieved documents in {}".format(path_cache_output))
+                with open(path_cache_output, "wb") as f:
+                    pickle.dump(retrieved, f)
+        else:
+            steps.append("[READY] BM25 INFERENCE")
+            if not simulation:
+                log.info("[BM25] Load the retrieved documents from {}".format(path_cache_output))
+                with open(path_cache_output, "rb") as f:
+                    retrieved = pickle.load(f)
 
-    def inference(self, simulation=False, **kwargs):
+        if simulation:
+            return steps
+        else:
+            model_output["retrieved"] = retrieved["retrieved"]
+            return model_output
+
+    def inference(self, **kwargs):
         steps = []
-        model_output = None
+        model_output = {}
 
         if "queries" in kwargs:
-            queries = kwargs.pop("queries")
+            queries = kwargs["queries"]
+
+        if "simulation" in kwargs:
+            simulation = kwargs["simulation"]
+        else:
+            simulation = False
 
         if not self.is_trained():
-            steps.append("[MISS] BM25 TRAIN")
+            steps.append("[MISS/CRITICAL] BM25 TRAIN")
+            if not simulation:
+                raise Exception("BM25 is not trained")
         else:
             steps.append("[READY] BM25 INFERENCE")
             if not simulation:
                 # code to infer over the queries
-                model_output = self.retrieve_for_queries(queries)
+                model_output["retrieved"] = self.retrieve_for_queries(queries)
 
         if simulation:
             return steps

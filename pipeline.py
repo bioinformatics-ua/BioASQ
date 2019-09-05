@@ -1,12 +1,12 @@
 from utils import yaml_loader, json_loader, dynamicly_class_load
 from dataset.dataset import Corpora, Queries
 from os.path import exists, join
+from logger import log
 
 
 class Pipeline:
-    def __init__(self, config_file, mode, logging):
+    def __init__(self, config_file, mode):
         # attributes
-        self.logging = logging
         self.mode = mode
         self.modules = []
         self.steps = []  # string list with the pipeline execution routine
@@ -17,7 +17,7 @@ class Pipeline:
         # validate mode
         if self.mode is not None and self.config["mode"] != self.mode:
             print("[CONFIG FILE] Error: mode in config is", self.config["mode"], "but the runtime option is", self.mode)
-            self.logging.error("[CONFIG FILE] Error: mode in config is", self.config["mode"], "but the runtime option is", self.mode)
+            log.error("[CONFIG FILE] Error: mode in config is {} but the runtime option is {}".format(self.config["mode"], self.mode))
 
         # check important parameters in the config (TODO validation and error checking)
         print("[CONFIG FILE] cache_folder path:", "OK" if exists(self.config["cache_folder"]) else "FAIL")
@@ -26,17 +26,17 @@ class Pipeline:
         print("[CONFIG FILE] queires validation path file:", "OK" if exists(join(self.config["queries"]["folder"], "validation.json")) else "FAIL")
 
         # setup documents repository
-        self.corpora = Corpora(logging=self.logging, **self.config["corpora"])
+        self.corpora = Corpora(**self.config["corpora"])
 
         if self.mode == "train":
             # setup Queries
-            self.queries = Queries(mode=self.mode, **self.config["queries"])
+            self.queries = Queries(self.mode, **self.config["queries"])
 
         # setup modules
         for module in self.config["pipeline"]:
             name, attributes = list(module.items())[0]
             _class = dynamicly_class_load("models."+name, name)
-            m_instance = _class(cache_folder=self.config["cache_folder"], prefix_name=self.corpora.name, logging=self.logging, **attributes)
+            m_instance = _class(cache_folder=self.config["cache_folder"], prefix_name=self.corpora.name, **attributes)
             m_instance.build()
             self.modules.append(m_instance)
 
@@ -50,7 +50,6 @@ class Pipeline:
         steps = []
         for module in self.modules:
             steps.extend(module.train(simulation=True))
-            steps.extend(module.inference(simulation=True))
         self.__print_routine(steps)
 
     def check_inference_routine(self):
@@ -60,24 +59,24 @@ class Pipeline:
         self.__print_routine(steps)
 
     def __print_routine(self, steps):
-        print("\nRoutine")
+        print("---------------------\n[ROUTINE] Steps that the pipeline will execute")
         for step in steps:
-            print(step)
-        print("\n")
+            print("\t",step)
+        print("---------------------")
 
     def load_config(self, config_file):
         # load config file
         loaders = [yaml_loader, json_loader]  # will try this loaders in a sequential order
         for loader in loaders:
-            config = loader(config_file, self.logging)
+            config = loader(config_file)
             if config is not None:
                 print("[CONFIG FILE]", loader.__name__, "was used to load the configuration file")
-                self.logging.info("[CONFIG FILE]", loader.__name__, "was used to load the configuration file")
+                log.info("[CONFIG FILE] {} was used to load the configuration file".format(loader.__name__))
                 break
 
         if config is None:
             print("[CONFIG FILE] Error: was not possible to read the configuration file")
-            self.logging.error("[CONFIG FILE] Error: was not possible to read the configuration file")
+            log.error("[CONFIG FILE] Error: was not possible to read the configuration file")
             exit(1)
 
         return config

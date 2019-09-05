@@ -1,14 +1,14 @@
 from models.model import ModelAPI
 from utils import dynamicly_class_load
 from os.path import exists, join
+from logger import log
 
 
 class DeepRank(ModelAPI):
-    def __init__(self, prefix_name, cache_folder, logging, top_k, tokenizer, **kwargs):
+    def __init__(self, prefix_name, cache_folder, top_k, tokenizer, **kwargs):
         self.top_k = top_k
         self.cache_folder = cache_folder
         self.prefix_name = prefix_name
-        self.logging = logging
 
         name, attributes = list(tokenizer.items())[0]
         _class = dynamicly_class_load("tokenizers."+name, name)
@@ -17,18 +17,22 @@ class DeepRank(ModelAPI):
         self.name = "DeepRank_with_"+self.tokenizer.name
 
     def is_trained(self):
-        # use elastic search API instead to query the m_instance
         return exists(join(self.cache_folder, self.name))
 
     def train(self, simulation=False, **kwargs):
         steps = []
         model_output = None
 
+        if "corpora" in kwargs:
+            corpora = kwargs.pop("corpora")
+
         if not self.tokenizer.is_trained():
             steps.append("[MISS] Tokenizer for the DeepRank")
             if not simulation:
                 # code to create tokenizer
-                raise NotImplementedError()
+                print("[START] Create tokenizer for DeepRank")
+                self.tokenizer.fit_tokenizer_multiprocess(corpora.read_documents_iterator(mapping=lambda x: x["title"]+" "+x["abstract"]))
+                print("[FINISHED] Tokenizer for DeepRank with", len(self.tokenizer.word_counts), "terms")
         else:
             steps.append("[READY] Tokenizer for the DeepRank")
 

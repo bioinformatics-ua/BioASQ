@@ -12,6 +12,7 @@ import os
 from multiprocessing import Process
 import gc
 import sys
+from logger import log
 
 
 def fitTokenizeJob(proc_id, articles, _class, cache_folder, prefix_name, merge_tokenizer_path):
@@ -101,7 +102,7 @@ class BaseTokenizer:
         if kwargs:
             raise TypeError('Unrecognized keyword arguments: ' + str(kwargs))
 
-    def tokenizer(self, text):
+    def tokenizer(self, text, *args, **kwargs):
         raise NotImplementedError("The function tokenizer must be implemented by a subclass")
 
     @staticmethod
@@ -305,7 +306,7 @@ class BaseTokenizer:
     def load_from_json(path):
         raise NotImplementedError()
 
-    def fit_tokenizer_multiprocess(self, corpora_generator):
+    def fit_tokenizer_multiprocess(self, corpora_iterator):
         merge_tokenizer_path = tempfile.mkdtemp()
 
         try:
@@ -314,7 +315,7 @@ class BaseTokenizer:
                 return Process(target=fitTokenizeJob, args=(proc_id, articles, self.__class__, self.cache_folder, self.prefix_name, merge_tokenizer_path))
 
             # multiprocess loop
-            for i, texts in enumerate(corpora_generator()):
+            for i, texts in enumerate(corpora_iterator):
                 process = []
 
                 t_len = len(texts)
@@ -337,6 +338,7 @@ class BaseTokenizer:
             files = sorted(os.listdir(merge_tokenizer_path))
 
             for file in files:
+                log.info("[TOKENIZER] Load {}".format(file))
                 loaded_tk = self.__class__.load_from_json(path=os.path.join(merge_tokenizer_path, file))
 
                 # manual merge
@@ -379,5 +381,5 @@ class BaseTokenizer:
             raise e
         finally:
             # always remove the temp directory
-            print("remove", merge_tokenizer_path)
+            log.info("[TOKENIZER] Remove {}".format(merge_tokenizer_path))
             shutil.rmtree(merge_tokenizer_path)

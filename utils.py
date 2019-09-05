@@ -1,23 +1,24 @@
 import json
 import yaml
 from importlib import import_module
+from logger import log
 
 
-def yaml_loader(file_name, logging):
+def yaml_loader(file_name):
     try:
         with open(file_name) as f:
             return yaml.safe_load(f)
     except Exception as e:
-        logging.warning(e)
+        log.warning(e)
     return None
 
 
-def json_loader(file_name, logging):
+def json_loader(file_name):
     try:
         with open(file_name) as f:
             return json.load(f)
     except Exception as e:
-        logging.warning(e)
+        log.warning(e)
     return None
 
 

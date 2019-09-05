@@ -22,7 +22,7 @@ class Regex(BaseTokenizer):
         self.filter_whitespace = lambda x: not x == ""
         self.name = self.prefix_name + "_" + ("stem_" if stem else "")+"Regex"
 
-    def tokenizer(self, text):
+    def tokenizer(self, text, *args, **kwargs):
         text = text.lower()
         text = (text.encode("ascii", "replace").decode("utf-8"))
         filters = '!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n'

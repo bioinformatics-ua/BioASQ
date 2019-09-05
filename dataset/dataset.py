@@ -3,16 +3,16 @@ import codecs
 import json
 import gc
 from os.path import join
+from logger import log
 
 
 class Corpora:
-    def __init__(self, name, folder, logging, files_are_compressed=False):
+    def __init__(self, name, folder, files_are_compressed=False):
         self.name = name
         self.folder_rep = folder
-        self.logging = logging
         self.files_are_compressed = files_are_compressed
 
-    def read_documents_generator(self, mapping=None):
+    def read_documents_iterator(self, mapping=None):
         """
         creates a generator to read the document collection
         """
@@ -26,18 +26,18 @@ class Corpora:
 
             def generator():
                 for m in members:
-                    self.logging.info("[CORPORA] Openning tar file", m.name)
+                    log.info("[CORPORA] Openning tar file {}".format(m.name))
                     f = tar.extractfile(m)
                     articles = json.load(reader(f))
-                    self.logging.info("[CORPORA] Returning:", len(articles), "articles")
+                    log.info("[CORPORA] Returning: articles {}".format(len(articles)))
                     if mapping is not None:
                         articles = list(map(mapping, articles))
                     yield articles
                     f.close()
                     del f
-                    self.logging.info("[CORPORA] Force garbage collector", gc.collect())
+                    log.info("[CORPORA] Force garbage collector ({})".format(gc.collect()))
 
-            return generator
+            return generator()
         else:
             raise NotImplementedError("In the current version the documents must be in json format and compressed (tar.gz) ")
 

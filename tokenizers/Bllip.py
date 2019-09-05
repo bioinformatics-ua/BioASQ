@@ -18,7 +18,7 @@ class Bllip(BaseTokenizer):
         self.st = PorterStemmer() if stem else None
         self.name = self.prefix_name + "_" + ("stem_" if stem else "")+"Bllip"
 
-    def tokenizer(self, text):
+    def tokenizer(self, text, *args, **kwargs):
         tokens = []
         text = text.lower()
         sentences = text.split(".")

@@ -4,14 +4,11 @@ Application entry point
 
 import argparse
 from pipeline import Pipeline
-import logging
-
-# Setup logging
-logging.basicConfig(filename='app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s')
+from logger import log
 
 
 if __name__ == "__main__":
-
+    log.info("[Execute]")
     # ARG parse
     parser = argparse.ArgumentParser(description="Neural Information Retrieval pipeline")
     parser.add_argument("--mode", help="Runing mode of the pipeline",
@@ -22,7 +19,7 @@ if __name__ == "__main__":
 
     # create Pipeline Object
     print()
-    pipeline = Pipeline(args.config, args.mode, logging)
+    pipeline = Pipeline(args.config, args.mode)
     pipeline.build()
 
     pipeline.check_train_routine()
