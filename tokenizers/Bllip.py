@@ -14,7 +14,7 @@ else:
 
 class Bllip(BaseTokenizer):
     def __init__(self, stem=False, **kwargs):
-        super().__init__(kwargs)
+        super().__init__(**kwargs)
         self.st = PorterStemmer() if stem else None
         self.name = self.prefix_name + "_" + ("stem_" if stem else "")+"Bllip"
 
