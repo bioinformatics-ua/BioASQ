@@ -133,7 +133,8 @@ class BM25_ES(ModelAPI):
             steps.append("[READY] BM25 INDEX")
 
         # last step is to produce training output for the next module
-        path_cache_output = join(self.cache_folder, self.name+"retrieved_results.p")
+        name = "{}_{}_retrieved_results.p".format(kwargs["queries"].train_name, self.name)
+        path_cache_output = join(self.cache_folder, name)
         if not exists(path_cache_output):
             steps.append("[MISS] BM25 INFERENCE")
             if not simulation:

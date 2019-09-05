@@ -1,10 +1,11 @@
 from utils import yaml_loader, json_loader, dynamicly_class_load
 from dataset.dataset import Corpora, Queries
-from os.path import exists, join
+from os.path import exists
 from logger import log
+from models.model import ModelAPI
 
 
-class Pipeline:
+class Pipeline(ModelAPI):
     def __init__(self, config_file, mode):
         # attributes
         self.mode = mode
@@ -22,8 +23,8 @@ class Pipeline:
         # check important parameters in the config (TODO validation and error checking)
         print("[CONFIG FILE] cache_folder path:", "OK" if exists(self.config["cache_folder"]) else "FAIL")
         print("[CONFIG FILE] doc_repository folder path:", "OK" if exists(self.config["corpora"]["folder"]) else "FAIL")
-        print("[CONFIG FILE] queires train path file:", "OK" if exists(join(self.config["queries"]["folder"], "train.json")) else "FAIL")
-        print("[CONFIG FILE] queires validation path file:", "OK" if exists(join(self.config["queries"]["folder"], "validation.json")) else "FAIL")
+        print("[CONFIG FILE] queires train path file:", "OK" if exists(self.config["queries"]["train_file"]) else "FAIL")
+        print("[CONFIG FILE] queires validation path file:", "OK" if exists(self.config["queries"]["validation_file"]) else "FAIL")
 
         # setup documents repository
         self.corpora = Corpora(**self.config["corpora"])
@@ -40,29 +41,20 @@ class Pipeline:
             m_instance.build()
             self.modules.append(m_instance)
 
-    def train(self):
+    def train(self, simulation=False):
         # first module input is always the corpora plus training queires
         next_module_input = {"corpora": self.corpora, "queries": self.queries}
-        for module in self.modules:
-            next_module_input = module.train(**next_module_input)
-
-    def check_train_routine(self):
         steps = []
         for module in self.modules:
-            steps.extend(module.train(simulation=True))
-        self.__print_routine(steps)
+            if simulation:
+                steps.extend(module.train(simulation=True, **next_module_input))
+            else:
+                next_module_input = module.train(**next_module_input)
 
-    def check_inference_routine(self):
-        steps = []
-        for module in self.modules:
-            steps.extend(module.inference(simulation=True))
-        self.__print_routine(steps)
-
-    def __print_routine(self, steps):
-        print("---------------------\n[ROUTINE] Steps that the pipeline will execute")
-        for step in steps:
-            print("\t",step)
-        print("---------------------")
+        if simulation:
+            return steps
+        else:
+            return next_module_input
 
     def load_config(self, config_file):
         # load config file

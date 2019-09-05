@@ -2,7 +2,7 @@ import tarfile
 import codecs
 import json
 import gc
-from os.path import join
+import os
 from logger import log
 
 
@@ -43,8 +43,12 @@ class Corpora:
 
 
 class Queries:
-    def __init__(self, mode, folder):
-        self.folder_rep = folder
+    def __init__(self, mode, train_file, validation_file):
+        self.train_file = train_file
+        self.validation_file = validation_file
+        self.train_name = os.path.basename(self.train_file).split(".")[-1]
+        self.validation_name = os.path.basename(self.validation_file).split(".")[-1]
+
         self.mode = mode
 
         self.train_data = []
@@ -53,8 +57,8 @@ class Queries:
         self.__load()
 
     def __load(self):
-        with open(join(self.folder_rep, "train.json"), "r") as f:
+        with open(self.train_file, "r") as f:
             self.train_data.extend(json.load(f))
 
-        with open(join(self.folder_rep, "validation.json"), "r") as f:
+        with open(self.validation_file, "r") as f:
             self.validation_data.extend(json.load(f))

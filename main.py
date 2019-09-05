@@ -22,6 +22,10 @@ if __name__ == "__main__":
     pipeline = Pipeline(args.config, args.mode)
     pipeline.build()
 
-    pipeline.check_train_routine()
+    print("---------------------\n[ROUTINE] Steps that the pipeline will execute")
+    steps = pipeline.train(simulation=True)
+    for step in steps:
+        print("\t", step)
+    print("---------------------")
 
     pipeline.train()
