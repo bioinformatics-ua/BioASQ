@@ -46,8 +46,8 @@ class Queries:
     def __init__(self, mode, train_file, validation_file):
         self.train_file = train_file
         self.validation_file = validation_file
-        self.train_name = os.path.basename(self.train_file).split(".")[-1]
-        self.validation_name = os.path.basename(self.validation_file).split(".")[-1]
+        self.train_name = os.path.basename(self.train_file).split(".")[0]
+        self.validation_name = os.path.basename(self.validation_file).split(".")[0]
 
         self.mode = mode
 
