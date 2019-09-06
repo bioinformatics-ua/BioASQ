@@ -3,35 +3,39 @@ from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
 
 
-class InputNetwork:
+class DetectionNetwork(Model):
     def __init__(self, Q, P, S, embedding, **kwargs):
+        super().__init__()
         self.Q = Q  # number max of query tokens
         self.P = P  # number max of snippets per query token
         self.S = S  # number max of snippet tokens
         self.embedding = embedding
 
-    def build_model(self):
+        # build the layers
+        self.embedding_layer = Embedding(self.embedding.vocab_size,
+                                         self.embedding.embedding_size,
+                                         name="embedding_layer",
+                                         weights=[self.embedding.embedding_matrix()],
+                                         trainable=self.embedding.trainable)
 
-        query_input = Input(shape=(self.Q,), name="query_input")
-        snippets_input = Input(shape=(self.Q, self.P, self.S), name="snippets_input")
+        self.similarity_layer = SimilarityLayer(name="query_snippets_cosine")
 
-        embedding_layer = Embedding(self.embedding.vocab_size,
-                                    self.embedding.embedding_size,
-                                    name="embedding_layer",
-                                    weights=[self.embedding.embedding_matrix()],
-                                    trainable=self.embedding.trainable)
+        self.auxiliar_transpose_layer = Lambda(lambda x: K.permute_dimensions(x, [0, 1, 2, 4, 3]), name="2D_transpose_in_5th_dimension")
 
-        similarity_layer = SimilarityLayer(name="query_snippets_cosine")
+    def call(self, x):
+        """
+        x[0] is query input with shape=(self.Q,)
+        x[1] is snippets input with shape=(self.Q, self.P, self.S)
+        """
+        query_input = x[0]
+        snippets_input = x[1]
 
-        auxiliar_transpose_layer = Lambda(lambda x: K.permute_dimensions(x, [0, 1, 2, 4, 3]), name="2D_transpose_in_5th_dimension")
+        query_embedding = self.embedding_layer(query_input)
+        snippet_embedding = self.embedding_layer(snippets_input)
+        snippet_embedding = self.auxiliar_transpose_layer(snippet_embedding)
+        similarity_matrix = self.similarity_layer([query_embedding, snippet_embedding])
 
-        # assemble
-        query_embedding = embedding_layer(query_input)
-        snippet_embedding = embedding_layer(snippets_input)
-        snippet_embedding = auxiliar_transpose_layer(snippet_embedding)
-        similarity_matrix = similarity_layer([query_embedding, snippet_embedding])
-
-        return Model(inputs=[query_input, snippets_input], outputs=[similarity_matrix], name="input_network")
+        return similarity_matrix
 
 
 class SimilarityLayer(Layer):

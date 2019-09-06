@@ -31,7 +31,10 @@ pipeline:
             S: 15 #number max of snippet tokens
         measure_network:
             MeasureNetwork:
-                filters: 100 # class name of the measure network
+                activation: "selu"
+                filters: 100
+                gru_bidirectional: False
+                gru_dim: 56
                 kernel:
                     - 3 #x
                     - 3 #y
