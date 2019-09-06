@@ -2,9 +2,9 @@ from models.model import ModelAPI
 from utils import dynamicly_class_load
 from os.path import exists, join
 from tensorflow.keras.layers import Input
+from tensorflow.keras.models import Model
 from logger import log
 from models.subnetworks.input_network import DetectionNetwork
-from models.subnetworks.MeasureNetwork import MeasureNetwork
 
 
 class DeepRank(ModelAPI):
@@ -47,10 +47,17 @@ class DeepRank(ModelAPI):
 
         # build 3 sub models
         detection_network = DetectionNetwork(embedding=self.embedding, **input_network)
-        print(measure_network)
+
+        # measure_network
         name, attributes = list(measure_network.items())[0]
         _class = dynamicly_class_load("models.subnetworks."+name, name)
         measure_network = _class(**input_network, **attributes)
+
+        # aggregation_network
+        name, attributes = list(aggregation_network.items())[0]
+        _class = dynamicly_class_load("models.subnetworks."+name, name)
+        aggregation_network = _class(embedding_layer=detection_network.embedding_layer, **attributes)
+
 
         # assemble the network
         query_input = Input(shape=(detection_network.Q,), name="query_input")
@@ -58,6 +65,14 @@ class DeepRank(ModelAPI):
         snippets_position_input = Input(shape=(detection_network.Q, detection_network.P), name="snippets_position_input")
 
         deeprank_detection = detection_network([query_input, snippets_input])
+        deeprank_measure = measure_network([deeprank_detection, snippets_position_input])
+        deeprank_score = aggregation_network([query_input, deeprank_measure])
+
+        self.deeprank_model = Model(inputs=[query_input, snippets_input, snippets_position_input], outputs=[deeprank_score])
+        detection_network.summary(print_fn=log.info)
+        measure_network.summary(print_fn=log.info)
+        aggregation_network.summary(print_fn=log.info)
+        self.deeprank_model.summary(print_fn=log.info)
 
     def train(self, simulation=False, **kwargs):
         steps = []
