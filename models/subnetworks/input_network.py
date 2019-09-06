@@ -18,7 +18,7 @@ class InputNetwork:
         embedding_layer = Embedding(self.embedding.vocab_size,
                                     self.embedding.embedding_size,
                                     name="embedding_layer",
-                                    weights=[self.embedding.matrix],
+                                    weights=[self.embedding.embedding_matrix()],
                                     trainable=self.embedding.trainable)
 
         similarity_layer = SimilarityLayer(name="query_snippets_cosine")

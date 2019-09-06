@@ -29,20 +29,25 @@ class DeepRank(ModelAPI):
         # dynamicly load embedding Object
         name, attributes = list(embedding.items())[0]
         _class = dynamicly_class_load("embeddings."+name, name)
-        self.embedding = _class(cache_folder=cache_folder, prefix_name=self.prefix_name, **attributes)
+        self.embedding = _class.maybe_load(cache_folder=cache_folder, prefix_name=self.prefix_name, tokenizer=self.tokenizer, **attributes)
 
         # input network is always the same
         self.input_network = InputNetwork(embedding=self.embedding, **input_network)
 
         # measure network
 
-        self.name = "DeepRank_with_"+self.tokenizer.name
+        # name
+        self.name = "DeepRank_{}_{}_{}_{}".format(self.input_network.Q,
+                                                  self.input_network.P,
+                                                  self.input_network.S,
+                                                  self.embedding.name)
 
     def is_trained(self):
         return exists(join(self.cache_folder, self.name))
 
     def build_network(self):
         # Build neural net in a lazzy way (only if its needed)
+        pass
 
     def train(self, simulation=False, **kwargs):
         steps = []
@@ -61,13 +66,20 @@ class DeepRank(ModelAPI):
         else:
             steps.append("[READY] Tokenizer for the DeepRank")
 
+        if not self.embedding.has_matrix():
+            steps.append("[MISS] Embedding matrix for the tokenizer")
+            if not simulation:
+                self.embedding.build_matrix()
+        else:
+            steps.append("[READY] Embedding matrix for the tokenizer")
+
         if not self.is_trained():
-            steps.append("[MISS] DeepRank TRAIN")
+            steps.append("[MISS] DeepRank build network and train")
             if not simulation:
                 # code to create index
                 raise NotImplementedError()
         else:
-            steps.append("[READY] DeepRank TRAIN")
+            steps.append("[READY] DeepRank trained network")
 
         if simulation:
             return steps
