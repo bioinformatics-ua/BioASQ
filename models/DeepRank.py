@@ -67,8 +67,14 @@ class DeepRank(ModelAPI):
         training_data = {}
         # select irrelevant and particly irrelevant articles
         for query_id, query_data in queries.train_data_dict.items():
+            log.info("[DeepRank] Prepare query {}".format(query_id))
             partially_positive_ids = set(map(lambda x: x["id"], retrieved["train"][query_id]["documents"]))
             retrieved_positive_ids = set(filter(lambda x: x in partially_positive_ids, query_data["documents"]))
+
+            if len(retrieved_positive_ids) == 0:
+                log.warning("[DeepRank] Query {} does not have any positive articles, action=skip".format(query_id))
+                # skip
+                continue
             # irrelevant ids
             irrelevant_ids = (collection_ids-retrieved_positive_ids)-partially_positive_ids
             num_irrelevant_ids = 10*len(partially_positive_ids)
