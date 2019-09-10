@@ -72,7 +72,7 @@ class FastText:
             data = {"vocab_size": self.vocab_size,
                     "embedding_size": self.embedding_size,
                     "matrix": self.matrix}
-            pickle.dump(data, f)
+            pickle.dump(data, f, protocol=4)
 
     def embedding_matrix(self):
         if not self.has_matrix():

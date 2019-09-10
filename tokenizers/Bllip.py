@@ -75,7 +75,7 @@ class Bllip(BaseTokenizer):
         name = prefix_name + "_" + ("stem_" if stem else "")+"Bllip.json"
         path = join(cache_folder, name)
         if exists(path):
-            print("[LOAD FROM CACHE] Load regex tokenizer from", path)
+            print("[LOAD FROM CACHE] Load tokenizer from", path)
             return Bllip.load_from_json(path)
 
         return Bllip(stem, cache_folder=cache_folder, prefix_name=prefix_name, **kwargs)

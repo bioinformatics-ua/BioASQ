@@ -75,7 +75,7 @@ class Regex(BaseTokenizer):
         name = prefix_name + "_" + ("stem_" if stem else "")+"Regex.json"
         path = join(cache_folder, name)
         if exists(path):
-            print("[LOAD FROM CACHE] Load regex tokenizer from", path)
+            print("[LOAD FROM CACHE] Load tokenizer from", path)
             return Regex.load_from_json(path)
 
         return Regex(stem, cache_folder=cache_folder, prefix_name=prefix_name, **kwargs)
