@@ -17,6 +17,11 @@ def __recall(prediction, expectation):
 
     return (precision, binary relevance list)
     """
+
+    # solve the indetermination but THIS IS STUPID ITS A DATASET ERROR
+    if len(expectation) == 0:
+        return 0
+
     #normalization
     if isinstance(prediction[0], tuple):
         prediction = list(map(lambda x: [0], prediction))

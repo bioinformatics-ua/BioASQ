@@ -5,6 +5,7 @@ from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from logger import log
 from models.subnetworks.input_network import DetectionNetwork
+from random import sample
 
 
 class DeepRank(ModelAPI):
@@ -47,14 +48,50 @@ class DeepRank(ModelAPI):
         return exists(join(self.cache_folder, "{}_cache_traing_data.p".format(self.name)))
 
     def prepare_training_data(self, corpora, queries, retrieved, **kwargs):
+
+        # positive document must be from previous module and training data
+        positive_id = []
+        for retrieved_train_data in retrieved["train"].values():
+            positive_id.extend([x["id"] for x in retrieved_train_data["documents"] if x["id"] in queries.positive_ids])
+        positive_id = set(positive_id)
+
         articles = {}
         # load corpus to memory
         for docs in corpora.read_documents_iterator():
             for doc in docs:
                 articles[doc["id"]] = "{} {}".format(doc["title"], doc["abstract"])
 
+        collection_ids = set(articles.keys())
 
-        print(len(retrieved["train"][0]["documents"]))
+        training_data = {}
+        # select irrelevant and particly irrelevant articles
+        for query_id, query_data in queries.train_data_dict.items():
+            partially_positive_ids = set(map(lambda x: x["id"], retrieved["train"][query_id]["documents"]))
+            retrieved_positive_ids = set(filter(lambda x: x in partially_positive_ids, query_data["documents"]))
+            # irrelevant ids
+            irrelevant_ids = (collection_ids-retrieved_positive_ids)-partially_positive_ids
+            num_irrelevant_ids = 10*len(partially_positive_ids)
+            num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
+            irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
+
+            training_data[query_id] = {"positive_ids": retrieved_positive_ids,
+                                       "partially_positive_ids": partially_positive_ids,
+                                       "irrelevant_ids": irrelevant_ids}
+
+        # total ids
+        articles_ids = set()
+        for data in training_data.values():
+            for ids in data["positive_ids"]:
+                articles_ids.add(ids)
+            for ids in data["partially_positive_ids"]:
+                articles_ids.add(ids)
+            for ids in data["irrelevant_ids"]:
+                articles_ids.add(ids)
+
+        print("[DeepRank] Total ids selected for training {}".format(len(articles_ids)))
+        log.info("[DeepRank] Total ids selected for training {}".format(len(articles_ids)))
+
+        del articles
 
         exit(1)
 

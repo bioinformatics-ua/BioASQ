@@ -83,10 +83,10 @@ class BM25_ES(ModelAPI):
 
     def retrieve_for_queries(self, query_data, name):
         """
-        query_data: list {query:<str>, query_id:<int>,...(positive)}
+        query_data: list {query:<str>, query_id:<int>, documents:<list - str>}
         """
         # TODO: Check elasticsearch for batch queries has a way of impriving
-        retrieved_results = []
+        retrieved_results = {}
         print("[BM25] Runing inference over data {}".format(name))
         for i, query_data in enumerate(query_data):
             query = ' '.join(map(lambda x: str(x), self.tokenizer.texts_to_sequences([query_data["query"]])[0]))
@@ -99,9 +99,9 @@ class BM25_ES(ModelAPI):
                                             "title": x['_source']['title']},
                                  retrieved['hits']['hits']))
             log.info("[BM25] {}-query: {}".format(i, query_data["query_id"]))
-            retrieved_results.append({"query_id": query_data["query_id"],
-                                      "query": query_data["query"],
-                                      "documents": documents})
+
+            retrieved_results[query_data["query_id"]] = {"query": query_data["query"],
+                                                         "documents": documents}
 
         return retrieved_results
 
@@ -170,7 +170,8 @@ class BM25_ES(ModelAPI):
             return model_output
 
     def __prepare_data(self, raw_predictions, raw_expectations):
-        raw_predictions = dict(map(lambda x: (x["query_id"], list(map(lambda k: k["id"], x["documents"]))), raw_predictions))
+
+        raw_predictions = dict(map(lambda x: (x[0], list(map(lambda k: k["id"], x[1]["documents"]))), raw_predictions.items()))
         raw_expectations = dict(map(lambda x: (x["query_id"], x["documents"]), raw_expectations))
 
         predictions = []

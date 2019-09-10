@@ -52,7 +52,10 @@ class Queries:
         self.mode = mode
 
         self.train_data = []
+        self.train_data_dict = {}
+        self.positive_ids = []
         self.validation_data = []
+        self.validation_data_dict = {}
 
         self.__load()
 
@@ -60,5 +63,13 @@ class Queries:
         with open(self.train_file, "r") as f:
             self.train_data.extend(json.load(f))
 
+        self.positive_ids = []
+        for data in self.train_data:
+            self.positive_ids.extend(data["documents"])
+        self.positive_ids = set(self.positive_ids)
+
         with open(self.validation_file, "r") as f:
             self.validation_data.extend(json.load(f))
+
+        self.train_data_dict = dict(map(lambda x: (x["query_id"], {"documents": x["documents"], "query": x["query"]}), self.train_data))
+        self.validation_data_dict = dict(map(lambda x: (x["query_id"], {"documents": x["documents"], "query": x["query"]}), self.validation_data_dict))
