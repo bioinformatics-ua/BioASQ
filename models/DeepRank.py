@@ -75,14 +75,10 @@ class DeepRank(ModelAPI):
             num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
             irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
-            query_tokenized = self.tokenizer.texts_to_sequences([query_data["query"]])[0]
-            if self.tokenizer.queries_sw:
-                query_tokenized = [token for token in query_tokenized if token not in self.tokenizer.stop_words]
-
             training_data[query_id] = {"positive_ids": retrieved_positive_ids,
                                        "partially_positive_ids": partially_positive_ids,
                                        "irrelevant_ids": irrelevant_ids,
-                                       "query": query_tokenized}
+                                       "query": self.tokenizer.tokenize_query(query_data["query"])}
 
         # total ids
         used_articles_ids = set()
@@ -96,7 +92,7 @@ class DeepRank(ModelAPI):
 
         print("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
         log.info("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
-        tokenized_articles = {id: self.tokenizer.texts_to_sequences([articles[id]])[0] for id in used_articles_ids}
+        tokenized_articles = {id: self.tokenizer.tokenize_article(articles[id]) for id in used_articles_ids}
 
         del articles
         log.info("[DeepRank] Call garbage collector {}".format(gc.collect()))
