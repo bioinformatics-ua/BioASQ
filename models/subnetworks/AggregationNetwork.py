@@ -18,8 +18,10 @@ class AggregationNetwork(Model):
         x[0]: query input
         x[1]: measure network input
         """
-        x[0] = self.embedding_layer(x[0])
-        term_gated = self.term_gating_layer(x)
+        query_input = x[0]
+        measure_input = x[1]
+        query_embedding = self.embedding_layer(query_input)
+        term_gated = self.term_gating_layer([query_embedding, measure_input])
         return self.dense(term_gated)
 
 

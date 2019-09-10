@@ -6,7 +6,8 @@ from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
 from logger import log
 from models.subnetworks.input_network import DetectionNetwork
-from random import sample
+from random import sample, choice
+import numpy as np
 import pickle
 import gc
 
@@ -74,9 +75,14 @@ class DeepRank(ModelAPI):
             num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
             irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
+            query_tokenized = self.tokenizer.texts_to_sequences([query_data["query"]])[0]
+            if self.tokenizer.queries_sw:
+                query_tokenized = [token for token in query_tokenized if token not in self.tokenizer.stop_words]
+
             training_data[query_id] = {"positive_ids": retrieved_positive_ids,
                                        "partially_positive_ids": partially_positive_ids,
-                                       "irrelevant_ids": irrelevant_ids}
+                                       "irrelevant_ids": irrelevant_ids,
+                                       "query": query_tokenized}
 
         # total ids
         used_articles_ids = set()
@@ -211,3 +217,43 @@ class DeepRank(ModelAPI):
 
     def inference(self, simulation=False, **kwargs):
         return []
+
+    # DATA GENERATOR FOR THIS MODEL
+    def training_generator(self, training_data, hyperparameters, **kwargs):
+
+        # initializer
+        batch_size = hyperparameters["batch_size"]
+        query = []
+        query_positive_doc = []
+        query_positive_doc_position = []
+        query_negative_doc = []
+        query_negative_doc_position = []
+
+        # generator loop
+        while True:
+            # stop condition
+            if len(query) >= batch_size:
+                query = np.array(query)
+                p = np.random.permutation(query.shape[0])
+                query = query[p]
+                query_positive_doc = np.array(query_positive_doc)[p]
+                query_positive_doc_position = np.array(query_positive_doc_position)[p]
+                query_negative_doc = np.array(query_negative_doc)[p]
+                query_negative_doc_position = np.array(query_negative_doc_position)[p]
+
+                X = [query, query_positive_doc, query_positive_doc_position, query_negative_doc, query_negative_doc_position]
+                yield X
+                # reset
+                query = []
+                query_positive_doc = []
+                query_positive_doc_position = []
+                query_negative_doc = []
+                query_negative_doc_position = []
+            else:
+                # select a random
+                query_id, query_data = choice(training_data["train"].items())
+
+
+class TrainDataGenerator(object):
+    def __init__(self, hyperparameters, **kwargs):
+        self.hyperparameters = hyperparameters

@@ -14,16 +14,41 @@ else:
 
 
 class Regex(BaseTokenizer):
-    def __init__(self, stem=False, **kwargs):
+    def __init__(self, stem=False, sw_file=None, queries_sw=False, articles_sw=False, **kwargs):
         super().__init__(**kwargs)
         self.stem = stem
         self.st = PorterStemmer() if stem else None
+        self.sw_file = sw_file
+        self.queries_sw = queries_sw
+        self.articles_sw = articles_sw
         self.pattern = re.compile('[^a-zA-Z0-9\s]+')
         self.filter_whitespace = lambda x: not x == ""
         self.name = self.prefix_name + "_" + ("stem_" if stem else "")+"Regex"
+        if self.sw_file is not None:
+            with open(self.sw_file, "r") as f:
+                self.stop_words = json.load(f)
+        self.stop_words_tokenized = None
 
     def get_properties(self):
         return {"cache_folder": self.cache_folder, "prefix_name": self.prefix_name, "stem": self.stem}
+
+    def tokenize_query(self, query):
+        tokenized_query = self.texts_to_sequences([query])[0]
+        if self.queries_sw:
+            if self.stop_words is None:  # lazzy initialization
+                self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
+            tokenized_query = [token for token in tokenized_query if token not in self.stop_words_tokenized]
+
+        return tokenized_query
+
+    def tokenize_article(self, article):
+        tokenized_article = self.texts_to_sequences([article])[0]
+        if self.articles_sw:
+            if self.stop_words is None:  # lazzy initialization
+                self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
+            tokenized_article = [token for token in tokenized_article if token not in self.stop_words_tokenized]
+
+        return tokenized_article
 
     def tokenizer(self, text, *args, **kwargs):
         text = text.lower()
@@ -42,6 +67,10 @@ class Regex(BaseTokenizer):
     def get_config(self):
         t_config = super().get_config()
         t_config["stem"] = json.dumps(self.stem)
+        if self.sw_file is not None:
+            t_config["sw_file"] = json.dumps(self.sw_file)
+            t_config["queries_sw"] = json.dumps(self.queries_sw)
+            t_config["articles_sw"] = json.dumps(self.articles_sw)
         return t_config
 
     def save_to_json(self, **kwargs):

@@ -43,6 +43,7 @@ pipeline:
             AggregationNetwork:
                 activation: "selu"
         hyperparameters:
+            batch_size: 128
             optimizer: "adadelta" #(optinal) default is AdaDelta
             l2_regularization: 0.0001 #(optinal) default is 0.0001
             num_partially_positive_samples: 3
