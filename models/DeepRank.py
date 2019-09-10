@@ -6,7 +6,10 @@ from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
 from logger import log
 from models.subnetworks.input_network import DetectionNetwork
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.optimizers import Adadelta
 from random import sample, choice
+import time
 import numpy as np
 import pickle
 import gc
@@ -35,6 +38,8 @@ class DeepRank(ModelAPI):
         name, attributes = list(embedding.items())[0]
         _class = dynamicly_class_load("embeddings."+name, name)
         self.embedding = _class.maybe_load(cache_folder=cache_folder, prefix_name=self.prefix_name, tokenizer=self.tokenizer, **attributes)
+
+        self.SNIPPET_POSITION_PADDING_VALUE = -1
 
         # name
         self.name = self.get_name(**kwargs)
@@ -81,9 +86,9 @@ class DeepRank(ModelAPI):
             num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
             irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
-            training_data[query_id] = {"positive_ids": retrieved_positive_ids,
-                                       "partially_positive_ids": partially_positive_ids,
-                                       "irrelevant_ids": irrelevant_ids,
+            training_data[query_id] = {"positive_ids": list(retrieved_positive_ids),
+                                       "partially_positive_ids": list(partially_positive_ids),
+                                       "irrelevant_ids": list(irrelevant_ids),
                                        "query": self.tokenizer.tokenize_query(query_data["query"])}
 
         # total ids
@@ -111,7 +116,7 @@ class DeepRank(ModelAPI):
 
         return data
 
-    def build_network(self, input_network, measure_network, aggregation_network, **kwargs):
+    def build_network(self, input_network, measure_network, aggregation_network, hyperparameters, **kwargs):
 
         # build 3 sub models
         detection_network = DetectionNetwork(embedding=self.embedding, **input_network)
@@ -139,7 +144,7 @@ class DeepRank(ModelAPI):
         aggregation_network.summary(print_fn=log.info)
         self.deeprank_model.summary(print_fn=log.info)
 
-    def build_train_arch(self, input_network, **kwargs):
+    def build_train_arch(self, input_network, hyperparameters, **kwargs):
         Q = input_network["Q"]
         P = input_network["P"]
         S = input_network["S"]
@@ -161,6 +166,9 @@ class DeepRank(ModelAPI):
         p_loss = K.mean(K.maximum(0.0, 1.0 - positive_documents_score + negative_documents_score))
         self.trainable_deep_rank.add_loss(p_loss)
         self.trainable_deep_rank.summary(print_fn=log.info)
+
+        optimizer = get_optimizer(**hyperparameters["optimizer"])
+        self.trainable_deep_rank.compile(optimizer=optimizer)
 
     def train(self, simulation=False, **kwargs):
         steps = kwargs["steps"]
@@ -213,18 +221,46 @@ class DeepRank(ModelAPI):
 
         if not simulation:
             # train the network
-            raise NotImplementedError("train the network")
+            self.train_network(training_data=train_data, **self.config)
 
         return model_output
 
     def inference(self, simulation=False, **kwargs):
         return []
 
-    # DATA GENERATOR FOR THIS MODEL
-    def training_generator(self, training_data, hyperparameters, **kwargs):
+    def train_network(self, training_data, hyperparameters, **kwargs):
+        print("[DeepRank] Start training")
+        epochs = hyperparameters["epoch"]
+        batch_size = hyperparameters["batch_size"]
+        steps = max(1, len(training_data["train"])//batch_size)
+        loss = []
+        training_generator = self.training_generator(training_data, hyperparameters, **kwargs)
 
+        for epoch in range(epochs):
+            loss_per_epoch = []
+            for step in range(steps):
+
+                X = next(training_generator)
+                print(X)
+                start = time.time()
+                loss_per_epoch.append(self.trainable_deep_rank.train_on_batch(X))
+                print("Step:", step,
+                      "| loss:", loss_per_epoch[-1],
+                      "| current max loss:", np.max(loss_per_epoch),
+                      "| current min loss:", np.min(loss_per_epoch),
+                      "| time:", time.time()-start,
+                      end="\r")
+
+    # DATA GENERATOR FOR THIS MODEL
+    def training_generator(self, training_data, hyperparameters, input_network, **kwargs):
+        Q = input_network["Q"]
+        P = input_network["P"]
+        S = input_network["S"]
         # initializer
         batch_size = hyperparameters["batch_size"]
+        num_partilly_positives_samples = hyperparameters["num_partially_positive_samples"]
+        num_negatives_samples = hyperparameters["num_negative_samples"]
+
         query = []
         query_positive_doc = []
         query_positive_doc_position = []
@@ -255,7 +291,85 @@ class DeepRank(ModelAPI):
                 # select a random
                 query_id, query_data = choice(training_data["train"].items())
 
+                # padding the query
+                tokenized_query = pad_sequences([query_data["query"]], maxlen=Q, padding="post")[0]
 
-class TrainDataGenerator(object):
-    def __init__(self, hyperparameters, **kwargs):
-        self.hyperparameters = hyperparameters
+                for j in range(num_partilly_positives_samples+num_negatives_samples):
+                    positive_article_id = choice(query_data["positive_ids"])
+                    positive_tokenized_article = training_data["train"]["articles"][positive_article_id]
+
+                    positive_snippets, positive_snippets_position = self.__snippet_interaction(tokenized_query, positive_tokenized_article, Q, P, S)
+
+                    if j < num_partilly_positives_samples:
+                        partially_positive_article_id = choice(query_data["partially_positive_ids"])
+                        partially_positive_tokenized_article = training_data["train"]["articles"][partially_positive_article_id]
+
+                        negative_snippets, negative_snippets_position = self.__snippet_interaction(tokenized_query, partially_positive_tokenized_article, Q, P, S)
+                    else:
+                        negative_article_id = choice(query_data["irrelevant_ids"])
+                        negative_tokenized_article = training_data["train"]["articles"][negative_article_id]
+
+                        negative_snippets, negative_snippets_position = self.__snippet_interaction(tokenized_query, negative_tokenized_article, Q, P, S)
+
+                    # add
+                    # not efficient
+                    query.append(tokenized_query)
+
+                    # positive doc
+                    query_positive_doc.append(positive_snippets)
+                    query_positive_doc_position.append(positive_snippets_position)
+
+                    # negative doc
+                    query_negative_doc.append(negative_snippets)
+                    query_negative_doc_position.append(negative_snippets_position)
+
+    def __snippet_interaction(self, tokenized_query, tokenized_article, Q, P, S):
+
+        snippets = []
+        snippets_position = []
+
+        half_size = S//2
+
+        # O(n^2) complexity, probably can do better with better data struct TODO see if is worthit
+        for query_token in tokenized_query:
+            snippets_per_token = []
+            snippets_per_token_position = []
+            if query_token != 0:  # jump padded token
+                for i, article_token in enumerate(tokenized_article):
+                    if article_token == query_token:
+
+                        lower_index = i-half_size
+                        lower_index = max(0, lower_index)
+
+                        higher_index = i+half_size
+                        higher_index = min(len(tokenized_article), higher_index)
+
+                        snippets_per_token.append(tokenized_article[lower_index:higher_index])
+                        snippets_per_token_position.append(i)
+
+            if len(snippets_per_token) == 0:  # zero pad
+                snippets.append(np.zeros((P, S), dtype=np.int32))
+                snippets_position.append(np.zeros((P), dtype=np.int32) + self.SNIPPET_POSITION_PADDING_VALUE)
+                continue
+
+            max_snippets_len = min(P, len(snippets_per_token))
+
+            # snippets in matrix format
+            # pad
+            snippets_per_token = pad_sequences(snippets_per_token, maxlen=S, padding="post")
+            # fill the gaps
+            _temp = np.zeros((P, S), dtype=np.int32)
+            _temp[:max_snippets_len] = snippets_per_token[:max_snippets_len]
+            snippets.append(_temp)
+
+            # snippets_position in matrix format
+            # pad
+            snippets_per_token_position = pad_sequences([snippets_per_token_position], maxlen=P, padding="post", value=self.SNIPPET_POSITION_PADDING_VALUE)[0]
+            snippets_position.append(snippets_per_token_position)
+
+        return snippets, snippets_position
+
+
+def get_optimizer(name, learning_rate):
+    if name.lower() == "adadelta":
+        return Adadelta(lr=learning_rate)
