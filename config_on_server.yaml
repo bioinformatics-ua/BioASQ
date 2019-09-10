@@ -22,6 +22,9 @@ pipeline:
             Regex:
                 n_process: 20
                 stem: false
+                sw_file: "tokenizers/stop_words.json"
+                queries_sw: true # stop words
+                articles_sw: false # stop words
         embedding:
             FastText:
                 trainable: false
