@@ -3,9 +3,12 @@ from utils import dynamicly_class_load
 from os.path import exists, join
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
+from tensorflow.keras import backend as K
 from logger import log
 from models.subnetworks.input_network import DetectionNetwork
 from random import sample
+import pickle
+import gc
 
 
 class DeepRank(ModelAPI):
@@ -45,15 +48,12 @@ class DeepRank(ModelAPI):
         return exists(join(self.cache_folder, self.name))
 
     def is_training_data_in_cache(self, **kwargs):
-        return exists(join(self.cache_folder, "{}_cache_traing_data.p".format(self.name)))
+        return exists(self.__training_data_file_name(**kwargs))
+
+    def __training_data_file_name(self, origin, **kwargs):
+        return join(self.cache_folder, "O{}_T{}_M{}_cache_traing_data.p".format(origin, self.tokenizer.name, self.name))
 
     def prepare_training_data(self, corpora, queries, retrieved, **kwargs):
-
-        # positive document must be from previous module and training data
-        positive_id = []
-        for retrieved_train_data in retrieved["train"].values():
-            positive_id.extend([x["id"] for x in retrieved_train_data["documents"] if x["id"] in queries.positive_ids])
-        positive_id = set(positive_id)
 
         articles = {}
         # load corpus to memory
@@ -79,23 +79,29 @@ class DeepRank(ModelAPI):
                                        "irrelevant_ids": irrelevant_ids}
 
         # total ids
-        articles_ids = set()
+        used_articles_ids = set()
         for data in training_data.values():
             for ids in data["positive_ids"]:
-                articles_ids.add(ids)
+                used_articles_ids.add(ids)
             for ids in data["partially_positive_ids"]:
-                articles_ids.add(ids)
+                used_articles_ids.add(ids)
             for ids in data["irrelevant_ids"]:
-                articles_ids.add(ids)
+                used_articles_ids.add(ids)
 
-        print("[DeepRank] Total ids selected for training {}".format(len(articles_ids)))
-        log.info("[DeepRank] Total ids selected for training {}".format(len(articles_ids)))
+        print("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
+        log.info("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
+        tokenized_articles = {id: self.tokenizer.texts_to_sequences([articles[id]])[0] for id in used_articles_ids}
 
         del articles
+        log.info("[DeepRank] Call garbage collector {}".format(gc.collect()))
 
-        exit(1)
+        data = {"train": training_data, "articles": tokenized_articles}
 
-        name = join(self.cache_folder, "{}_cache_traing_data.p".format(self.name))
+        # save
+        with open(self.__training_data_file_name(**kwargs), "wb") as f:
+            pickle.dump(data, f, protocol=4)
+
+        return data
 
     def build_network(self, input_network, measure_network, aggregation_network, **kwargs):
 
@@ -125,15 +131,37 @@ class DeepRank(ModelAPI):
         aggregation_network.summary(print_fn=log.info)
         self.deeprank_model.summary(print_fn=log.info)
 
-    def build_train_arch(self, **kwargs):
-        pass
+    def build_train_arch(self, input_network, **kwargs):
+        Q = input_network["Q"]
+        P = input_network["P"]
+        S = input_network["S"]
+
+        query_token_input = Input(shape=(Q,), name="dr_query_tokens")
+        positive_snippet_input = Input(shape=(Q, P, S), name="positive_snippet_tokens")
+        positive_snippet_position_input = Input(shape=(Q, P), name="positive_snippet_position_tokens")
+        negative_snippet_input = Input(shape=(Q, P, S), name="negative_snippet_tokens")
+        negative_snippet_position_input = Input(shape=(Q, P), name="negative_snippet_position_tokens")
+
+        positive_documents_score = self.deeprank_model([query_token_input, positive_snippet_input, positive_snippet_position_input])
+        negative_documents_score = self.deeprank_model([query_token_input, negative_snippet_input, negative_snippet_position_input])
+
+        inputs = [query_token_input, positive_snippet_input, positive_snippet_position_input, negative_snippet_input, negative_snippet_position_input]
+
+        self.trainable_deep_rank = Model(inputs=inputs, outputs=[positive_documents_score, negative_documents_score], name="deep_rank_trainable_arch")
+
+        # tensor loss
+        p_loss = K.mean(K.maximum(0.0, 1.0 - positive_documents_score + negative_documents_score))
+        self.trainable_deep_rank.add_loss(p_loss)
+        self.trainable_deep_rank.summary(print_fn=log.info)
 
     def train(self, simulation=False, **kwargs):
-        steps = []
-        model_output = None
+        steps = kwargs["steps"]
+        corpora = kwargs["corpora"]
+        queries = kwargs["queries"]
 
-        if "corpora" in kwargs:
-            corpora = kwargs["corpora"]
+        model_output = {"origin": self.name,
+                        "queries": queries,
+                        "steps": steps}
 
         if not self.tokenizer.is_trained():
             steps.append("[MISS] Tokenizer for the DeepRank")
@@ -156,9 +184,14 @@ class DeepRank(ModelAPI):
         if not self.is_training_data_in_cache(**kwargs):
             steps.append("[MISS] DeepRank training data in cache")
             if not simulation:
-                self.prepare_training_data(**kwargs)
+                train_data = self.prepare_training_data(**kwargs)
         else:
             steps.append("[READY] DeepRank training data in cache")
+            if not simulation:
+                # Load
+                print("[DeepRank] Loading preprocessed training data")
+                with open(self.__training_data_file_name(**kwargs), "rb") as f:
+                    train_data = pickle.load(f)
 
         # build the network
         if not self.is_trained():
@@ -174,10 +207,7 @@ class DeepRank(ModelAPI):
             # train the network
             raise NotImplementedError("train the network")
 
-        if simulation:
-            return steps
-        else:
-            return model_output
+        return model_output
 
     def inference(self, simulation=False, **kwargs):
         return []

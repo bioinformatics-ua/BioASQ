@@ -106,12 +106,13 @@ class BM25_ES(ModelAPI):
         return retrieved_results
 
     def train(self, **kwargs):
-        steps = []
+        steps = kwargs["steps"]
         corpora = kwargs["corpora"]
         queries = kwargs["queries"]
         model_output = {"origin": self.name,
                         "corpora": corpora,
-                        "queries": queries}
+                        "queries": queries,
+                        "steps": steps}
 
         if "simulation" in kwargs:
             simulation = kwargs["simulation"]
@@ -160,14 +161,12 @@ class BM25_ES(ModelAPI):
                     retrieved = pickle.load(f)
                 # rerun the show_evaluation
                 if self.evaluation:
-                    print(retrieved.keys())
                     self.show_evaluation(retrieved["retrieved"], queries)
 
-        if simulation:
-            return steps
-        else:
-            model_output["retrieved"] = retrieved["retrieved"]
-            return model_output
+                # add to the output
+                model_output["retrieved"] = retrieved["retrieved"]
+
+        return model_output
 
     def __prepare_data(self, raw_predictions, raw_expectations):
 

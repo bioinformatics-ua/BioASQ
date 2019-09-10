@@ -43,18 +43,11 @@ class Pipeline(ModelAPI):
 
     def train(self, simulation=False):
         # first module input is always the corpora plus training queires
-        next_module_input = {"corpora": self.corpora, "queries": self.queries}
-        steps = []
+        next_module_input = {"corpora": self.corpora, "queries": self.queries, "steps": []}
         for module in self.modules:
-            if simulation:
-                steps.extend(module.train(simulation=True, **next_module_input))
-            else:
-                next_module_input = module.train(**next_module_input)
+            next_module_input = module.train(simulation=simulation, **next_module_input)
 
-        if simulation:
-            return steps
-        else:
-            return next_module_input
+        return next_module_input
 
     def load_config(self, config_file):
         # load config file

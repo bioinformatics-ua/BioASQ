@@ -23,7 +23,7 @@ if __name__ == "__main__":
     pipeline.build()
 
     print("---------------------\n[ROUTINE] Steps that the pipeline will execute")
-    steps = pipeline.train(simulation=True)
+    steps = pipeline.train(simulation=True)["steps"]
     for step in steps:
         print("\t", step)
     print("---------------------")
