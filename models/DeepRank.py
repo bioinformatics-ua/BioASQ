@@ -43,21 +43,35 @@ class DeepRank(ModelAPI):
     def is_trained(self):
         return exists(join(self.cache_folder, self.name))
 
+    def is_training_data_in_cache(self, **kwargs):
+        return exists(join(self.cache_folder, "{}_cache_traing_data.p".format(self.name)))
+
+    def prepare_training_data(self, corpora, queries, retrieved, **kwargs):
+        articles = {}
+        # load corpus to memory
+        for docs in corpora.read_documents_iterator():
+            for doc in docs:
+                articles[doc["id"]] = "{} {}".format(doc["title"], doc["abstract"])
+
+
+        print(len(retrieved["train"][0]["documents"]))
+
+        exit(1)
+
+        name = join(self.cache_folder, "{}_cache_traing_data.p".format(self.name))
+
     def build_network(self, input_network, measure_network, aggregation_network, **kwargs):
 
         # build 3 sub models
         detection_network = DetectionNetwork(embedding=self.embedding, **input_network)
-
         # measure_network
         name, attributes = list(measure_network.items())[0]
         _class = dynamicly_class_load("models.subnetworks."+name, name)
         measure_network = _class(**input_network, **attributes)
-
         # aggregation_network
         name, attributes = list(aggregation_network.items())[0]
         _class = dynamicly_class_load("models.subnetworks."+name, name)
         aggregation_network = _class(embedding_layer=detection_network.embedding_layer, **attributes)
-
 
         # assemble the network
         query_input = Input(shape=(detection_network.Q,), name="query_input")
@@ -74,12 +88,15 @@ class DeepRank(ModelAPI):
         aggregation_network.summary(print_fn=log.info)
         self.deeprank_model.summary(print_fn=log.info)
 
+    def build_train_arch(self, **kwargs):
+        pass
+
     def train(self, simulation=False, **kwargs):
         steps = []
         model_output = None
 
         if "corpora" in kwargs:
-            corpora = kwargs.pop("corpora")
+            corpora = kwargs["corpora"]
 
         if not self.tokenizer.is_trained():
             steps.append("[MISS] Tokenizer for the DeepRank")
@@ -98,11 +115,21 @@ class DeepRank(ModelAPI):
         else:
             steps.append("[READY] Embedding matrix for the tokenizer")
 
+        # prepare the training data
+        if not self.is_training_data_in_cache(**kwargs):
+            steps.append("[MISS] DeepRank training data in cache")
+            if not simulation:
+                self.prepare_training_data(**kwargs)
+        else:
+            steps.append("[READY] DeepRank training data in cache")
+
+        # build the network
         if not self.is_trained():
             steps.append("[MISS] DeepRank build network")
             if not simulation:
                 steps.append("[DEEPRANK] build network")
                 self.build_network(**self.config)
+                self.build_train_arch(**self.config)
         else:
             steps.append("[READY] DeepRank trained network")
 

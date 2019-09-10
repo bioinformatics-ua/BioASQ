@@ -15,21 +15,35 @@ pipeline:
             Bllip:
                 n_process: 20
                 stem: true
+        evaluation: true
     - DeepRank:
         top_k: 10
+        tokenizer:
+            Regex:
+                n_process: 20
+                stem: false
+        embedding:
+            FastText:
+                trainable: false
+                path: "/backup/pre-trained_embeddings/fasttext/BioWordVec_PubMed_MIMICIII_d200.bin"
         input_network:
             Q: 13 #number max of query tokens
             P: 5 #number max of snippets per query token
             S: 15 #number max of snippet tokens
-            embedding_matrix: "auto" #creates a embedding matrix using fasttext library
-        measure_network: "MeasureNetwork" #class name of the measure network
-        aggregation_network: "AggregationNetwork" #class name of the aggregation network
+        measure_network:
+            MeasureNetwork:
+                activation: "selu"
+                filters: 100
+                gru_bidirectional: False
+                gru_dim: 56
+                kernel:
+                    - 3 #x
+                    - 3 #y
+        aggregation_network:
+            AggregationNetwork:
+                activation: "selu"
         hyperparameters:
             optimizer: "adadelta" #(optinal) default is AdaDelta
             l2_regularization: 0.0001 #(optinal) default is 0.0001
             num_partially_positive_samples: 3
             num_negative_samples: 4
-        tokenizer:
-            Regex:
-                n_process: 20
-                stem: false

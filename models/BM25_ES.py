@@ -2,16 +2,18 @@ from models.model import ModelAPI
 from utils import dynamicly_class_load
 from os.path import exists, join
 from elasticsearch import Elasticsearch, helpers
+from metrics.evaluators import f_map, f_recall
 import json
 from logger import log
 import pickle
 
 
 class BM25_ES(ModelAPI):
-    def __init__(self, prefix_name, cache_folder, top_k, address, tokenizer):
+    def __init__(self, prefix_name, cache_folder, top_k, address, tokenizer, evaluation=False):
         self.top_k = top_k
         self.cache_folder = cache_folder
         self.prefix_name = prefix_name
+        self.evaluation = evaluation
         self.es = Elasticsearch([address])
 
         name, attributes = list(tokenizer.items())[0]
@@ -79,11 +81,14 @@ class BM25_ES(ModelAPI):
         with open(join(self.cache_folder, self.name), "w") as f:
             json.dump({}, f)
 
-    def retrieve_for_queries(self, queries):
+    def retrieve_for_queries(self, query_data, name):
+        """
+        query_data: list {query:<str>, query_id:<int>,...(positive)}
+        """
         # TODO: Check elasticsearch for batch queries has a way of impriving
         retrieved_results = []
-        print("[BM25] Runing inference over training data")
-        for i, query_data in enumerate(queries.train_data):
+        print("[BM25] Runing inference over data {}".format(name))
+        for i, query_data in enumerate(query_data):
             query = ' '.join(map(lambda x: str(x), self.tokenizer.texts_to_sequences([query_data["query"]])[0]))
             query_es = {'query': {'bool': {'must': [{'query_string': {'query': query, 'analyze_wildcard': True}}], 'filter': [], 'should': [], 'must_not': []}}}
 
@@ -102,11 +107,11 @@ class BM25_ES(ModelAPI):
 
     def train(self, **kwargs):
         steps = []
-        model_output = {}
-
-        if "corpora" in kwargs:
-            corpora = kwargs["corpora"]
-            model_output["corpora"] = corpora
+        corpora = kwargs["corpora"]
+        queries = kwargs["queries"]
+        model_output = {"origin": self.name,
+                        "corpora": corpora,
+                        "queries": queries}
 
         if "simulation" in kwargs:
             simulation = kwargs["simulation"]
@@ -133,7 +138,10 @@ class BM25_ES(ModelAPI):
             steps.append("[READY] BM25 INDEX")
 
         # last step is to produce training output for the next module
-        name = "{}_{}_retrieved_results.p".format(kwargs["queries"].train_name, self.name)
+        name = "{}_{}_{}_{}_retrieved_results.p".format(queries.train_name,
+                                                        queries.validation_name,
+                                                        self.name,
+                                                        self.top_k)
         path_cache_output = join(self.cache_folder, name)
         if not exists(path_cache_output):
             steps.append("[MISS] BM25 INFERENCE")
@@ -150,6 +158,10 @@ class BM25_ES(ModelAPI):
                 log.info("[BM25] Load the retrieved documents from {}".format(path_cache_output))
                 with open(path_cache_output, "rb") as f:
                     retrieved = pickle.load(f)
+                # rerun the show_evaluation
+                if self.evaluation:
+                    print(retrieved.keys())
+                    self.show_evaluation(retrieved["retrieved"], queries)
 
         if simulation:
             return steps
@@ -157,9 +169,36 @@ class BM25_ES(ModelAPI):
             model_output["retrieved"] = retrieved["retrieved"]
             return model_output
 
+    def __prepare_data(self, raw_predictions, raw_expectations):
+        raw_predictions = dict(map(lambda x: (x["query_id"], list(map(lambda k: k["id"], x["documents"]))), raw_predictions))
+        raw_expectations = dict(map(lambda x: (x["query_id"], x["documents"]), raw_expectations))
+
+        predictions = []
+        expectations = []
+
+        for _id in raw_expectations.keys():
+            expectations.append(raw_expectations[_id])
+            predictions.append(raw_predictions[_id])
+
+        return predictions, expectations
+
+    def show_evaluation(self, dict_results, queries):
+        pred_train, expect_train = self.__prepare_data(dict_results["train"], queries.train_data)
+        pred_validation, expect_validation = self.__prepare_data(dict_results["validation"], queries.validation_data)
+
+        bioasq_map = "[BM25] BioASQ MAP@10: {}".format(f_map(pred_train, expect_train, bioASQ=True))
+        print(bioasq_map)
+        log.info(bioasq_map)
+        map = "[BM25] Normal MAP@10: {}".format(f_map(pred_train, expect_train))
+        print(map)
+        log.info(map)
+        recall = "[BM25] Normal RECALL@{}: {}".format(self.top_k, f_recall(pred_train, expect_train, at=self.top_k))
+        print(recall)
+        log.info(recall)
+
     def inference(self, **kwargs):
         steps = []
-        model_output = {}
+        model_output = {"origin": self.name}
 
         if "queries" in kwargs:
             queries = kwargs["queries"]
@@ -177,7 +216,13 @@ class BM25_ES(ModelAPI):
             steps.append("[READY] BM25 INFERENCE")
             if not simulation:
                 # code to infer over the queries
-                model_output["retrieved"] = self.retrieve_for_queries(queries)
+                train_out = self.retrieve_for_queries(queries.train_data, "train")
+                validation_out = self.retrieve_for_queries(queries.validation_data, "validation")
+                model_output["retrieved"] = {"train": train_out, "validation": validation_out}
+
+                # perform evaluation
+                if self.evaluation:
+                    self.show_evaluation(model_output["retrieved"], queries)
 
         if simulation:
             return steps

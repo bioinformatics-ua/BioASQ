@@ -15,6 +15,7 @@ pipeline:
             Regex:
                 n_process: 20
                 stem: true
+        evaluation: true
     - DeepRank:
         top_k: 10
         tokenizer:
@@ -38,7 +39,7 @@ pipeline:
                 kernel:
                     - 3 #x
                     - 3 #y
-        aggregation_network: 
+        aggregation_network:
             AggregationNetwork:
                 activation: "selu"
         hyperparameters:
