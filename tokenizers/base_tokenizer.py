@@ -267,6 +267,9 @@ class BaseTokenizer:
     def is_trained(self):
         return len(self.word_counts) > 0
 
+    def vocabulary_size(self):
+        return len(self.index_word) + 1  # because 0 index is reserved
+
     def get_config(self):
         '''Returns the tokenizer configuration as Python dictionary.
         The word count dictionaries used by the tokenizer get serialized
