@@ -1,5 +1,5 @@
 from models.model import ModelAPI
-from utils import dynamicly_class_load
+from utils import dynamicly_class_load, config_to_string
 from os.path import exists, join
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
@@ -42,13 +42,7 @@ class DeepRank(ModelAPI):
         self.SNIPPET_POSITION_PADDING_VALUE = -1
 
         # name
-        self.name = self.get_name(**kwargs)
-
-    def get_name(self, input_network, **kwargs):
-        return "DeepRank_{}_{}_{}_{}".format(input_network["Q"],
-                                             input_network["P"],
-                                             input_network["S"],
-                                             self.embedding.name)
+        self.name = "DeepRank_{}".format(config_to_string(self.config))
 
     def is_trained(self):
         return exists(join(self.cache_folder, self.name))
@@ -171,6 +165,7 @@ class DeepRank(ModelAPI):
         self.trainable_deep_rank.compile(optimizer=optimizer)
 
     def train(self, simulation=False, **kwargs):
+
         steps = kwargs["steps"]
         corpora = kwargs["corpora"]
         queries = kwargs["queries"]
@@ -223,10 +218,23 @@ class DeepRank(ModelAPI):
             # train the network
             self.train_network(training_data=train_data, **self.config)
 
+            # save current weights of the model
+            self.deeprank_model.save_weights("last_weights_{}.h5".format(self.name))
+
         return model_output
 
     def inference(self, simulation=False, **kwargs):
-        return []
+
+        steps = kwargs["steps"]
+
+
+        if not simulation:
+            print(kwargs["query_out"])
+
+        model_output = {"origin": self.name,
+                        "steps": steps}
+
+        return model_output
 
     def train_network(self, training_data, hyperparameters, **kwargs):
         print("[DeepRank] Start training")
@@ -322,6 +330,11 @@ class DeepRank(ModelAPI):
                     # negative doc
                     query_negative_doc.append(negative_snippets)
                     query_negative_doc_position.append(negative_snippets_position)
+
+    def inference_generator(self, inference_data, **kwargs):
+
+        # can use the text anexed in bm25 serch
+        pass
 
     def __snippet_interaction(self, tokenized_query, tokenized_article, Q, P, S):
 

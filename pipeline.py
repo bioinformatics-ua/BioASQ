@@ -15,10 +15,6 @@ class Pipeline(ModelAPI):
         self.config = self.load_config(config_file)
 
     def build(self):
-        # validate mode
-        if self.mode is not None and self.config["mode"] != self.mode:
-            print("[CONFIG FILE] Error: mode in config is", self.config["mode"], "but the runtime option is", self.mode)
-            log.error("[CONFIG FILE] Error: mode in config is {} but the runtime option is {}".format(self.config["mode"], self.mode))
 
         # check important parameters in the config (TODO validation and error checking)
         print("[CONFIG FILE] cache_folder path:", "OK" if exists(self.config["cache_folder"]) else "FAIL")
@@ -46,6 +42,18 @@ class Pipeline(ModelAPI):
         next_module_input = {"corpora": self.corpora, "queries": self.queries, "steps": []}
         for module in self.modules:
             next_module_input = module.train(simulation=simulation, **next_module_input)
+
+        return next_module_input
+
+    def inference(self, simulation=False, query=None):
+        if query is not None:
+            query = [{"query_id": 0, "query": query}]
+            next_module_input = {"corpora": self.corpora, "query": query, "steps": []}
+        else:
+            next_module_input = {"corpora": self.corpora, "queries": self.queries, "steps": []}
+
+        for module in self.modules:
+            next_module_input = module.inference(simulation=simulation, **next_module_input)
 
         return next_module_input
 

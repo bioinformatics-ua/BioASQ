@@ -83,7 +83,7 @@ class BM25_ES(ModelAPI):
 
     def retrieve_for_queries(self, query_data, name):
         """
-        query_data: list {query:<str>, query_id:<int>, documents:<list - str>}
+        query_data: list {query:<str>, query_id:<int>, (optinal non relevant for this function) documents:<list - str>}
         """
         # TODO: Check elasticsearch for batch queries has a way of impriving
         retrieved_results = {}
@@ -197,11 +197,9 @@ class BM25_ES(ModelAPI):
         log.info(recall)
 
     def inference(self, **kwargs):
-        steps = []
-        model_output = {"origin": self.name}
-
-        if "queries" in kwargs:
-            queries = kwargs["queries"]
+        steps = kwargs["steps"]
+        model_output = {"origin": self.name,
+                        "steps": steps}
 
         if "simulation" in kwargs:
             simulation = kwargs["simulation"]
@@ -216,15 +214,19 @@ class BM25_ES(ModelAPI):
             steps.append("[READY] BM25 INFERENCE")
             if not simulation:
                 # code to infer over the queries
-                train_out = self.retrieve_for_queries(queries.train_data, "train")
-                validation_out = self.retrieve_for_queries(queries.validation_data, "validation")
-                model_output["retrieved"] = {"train": train_out, "validation": validation_out}
+                if "queries" in kwargs:
+                    queries = kwargs["queries"]
+                    train_out = self.retrieve_for_queries(queries.train_data, "train")
+                    validation_out = self.retrieve_for_queries(queries.validation_data, "validation")
+                    model_output["retrieved"] = {"train": train_out, "validation": validation_out}
 
-                # perform evaluation
-                if self.evaluation:
-                    self.show_evaluation(model_output["retrieved"], queries)
+                    # perform evaluation
+                    if self.evaluation:
+                        self.show_evaluation(model_output["retrieved"], queries)
+                elif "query" in kwargs:
+                    query = kwargs["query"]
+                    model_output["query"] = query
+                    # RUN A SINGLE Query
+                    model_output["query_out"] = self.retrieve_for_queries(query, "query")
 
-        if simulation:
-            return steps
-        else:
-            return model_output
+        return model_output

@@ -28,7 +28,7 @@ class FastText:
         name = FastText.get_name(path, tokenizer.name)
         cache_path = join(cache_folder, name)
         if exists(cache_path):
-            print("[LOAD FROM CACHE] Load embedding matrix from", path)
+            print("[LOAD FROM CACHE] Load embedding matrix from", cache_path)
             with open(cache_path, "rb") as f:
                 data = pickle.load(f)
                 ft = FastText(cache_folder, prefix_name, tokenizer, path, trainable)
