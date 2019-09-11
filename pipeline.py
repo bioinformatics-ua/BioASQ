@@ -47,7 +47,7 @@ class Pipeline(ModelAPI):
 
     def inference(self, simulation=False, query=None):
         if query is not None:
-            query = [{"query_id": 0, "query": query}]
+            query = [{"query_id": "manual_submited", "query": query}]
             next_module_input = {"corpora": self.corpora, "query": query, "steps": []}
         else:
             next_module_input = {"corpora": self.corpora, "queries": self.queries, "steps": []}

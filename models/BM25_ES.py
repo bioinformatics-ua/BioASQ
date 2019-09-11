@@ -223,9 +223,11 @@ class BM25_ES(ModelAPI):
                     # perform evaluation
                     if self.evaluation:
                         self.show_evaluation(model_output["retrieved"], queries)
+                        
                 elif "query" in kwargs:
                     query = kwargs["query"]
                     model_output["query"] = query
+
                     # RUN A SINGLE Query
                     model_output["query_out"] = self.retrieve_for_queries(query, "query")
 

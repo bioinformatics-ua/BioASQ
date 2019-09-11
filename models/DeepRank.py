@@ -9,6 +9,7 @@ from models.subnetworks.input_network import DetectionNetwork
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.optimizers import Adadelta
 from random import sample, choice
+from utils import LimitedDict
 import time
 import numpy as np
 import pickle
@@ -28,6 +29,7 @@ class DeepRank(ModelAPI):
         self.cache_folder = cache_folder
         self.prefix_name = prefix_name
         self.config = kwargs
+        self.deeprank_model = None
 
         # dynamicly load tokenizer object
         name, attributes = list(tokenizer.items())[0]
@@ -41,8 +43,12 @@ class DeepRank(ModelAPI):
 
         self.SNIPPET_POSITION_PADDING_VALUE = -1
 
+        # some caching mechanism for inference
+        self.cached_articles_tokenized = LimitedDict(2000000)
+        self.cached_queries_tokenized = LimitedDict(50000)
+
         # name
-        self.name = "DeepRank_{}".format(config_to_string(self.config))
+        self.name = "DeepRank_{}_{}_{}".format(self.tokenizer.name, self.embedding.name, config_to_string(self.config))
 
     def is_trained(self):
         return exists(join(self.cache_folder, self.name))
@@ -219,20 +225,43 @@ class DeepRank(ModelAPI):
             self.train_network(training_data=train_data, **self.config)
 
             # save current weights of the model
-            self.deeprank_model.save_weights("last_weights_{}.h5".format(self.name))
+            self.deeprank_model.save_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)))
 
         return model_output
 
     def inference(self, simulation=False, **kwargs):
 
         steps = kwargs["steps"]
+        model_output = {"origin": self.name,
+                        "steps": steps,
+                        "query_out": {}
+                        }
 
+        # lazzy build
+        if self.deeprank_model is None:
+            if not simulation:
+                self.build_network(**self.config)  # assignment occurs here
+
+            name = join(self.cache_folder, "last_weights_{}.h5".format(self.name))
+            if exists(name):
+                print("LOAD FROM CACHE Weights for deeprank")
+                self.deeprank_model.load_weights(name)
+            else:
+                steps.append("[MISS] Weights for deeprank")
 
         if not simulation:
-            print(kwargs["query_out"])
-
-        model_output = {"origin": self.name,
-                        "steps": steps}
+            inference_generator = self.inference_generator(inference_data=kwargs["query_out"], input_network=self.config["input_network"], **kwargs)
+            for i, gen_data in enumerate(inference_generator):
+                X, docs_ids, query_id, query = gen_data
+                log.info("[DeepRank] inference for  {}-{}".format(i, query_id))
+                scores = self.deeprank_model.predict(X)
+                scores = map(lambda x: x[0], scores.tolist())
+                merge_scores_ids = list(zip(docs_ids, scores))
+                merge_scores_ids.sort(key=lambda x: -x[1])
+                merge_scores_ids = merge_scores_ids[:self.top_k]
+                log.info(merge_scores_ids)
+                model_output["query_out"][query_id] = {"query": query,
+                                                       "documents": list(map(lambda x: x[0], merge_scores_ids))}
 
         return model_output
 
@@ -331,10 +360,44 @@ class DeepRank(ModelAPI):
                     query_negative_doc.append(negative_snippets)
                     query_negative_doc_position.append(negative_snippets_position)
 
-    def inference_generator(self, inference_data, **kwargs):
+    def inference_generator(self, inference_data, input_network, **kwargs):
+        """
+        inference_data: [{query_id: <int>, query: <str>, documents: <list {}>}]
+        """
+        Q = input_network["Q"]
+        P = input_network["P"]
+        S = input_network["S"]
 
-        # can use the text anexed in bm25 serch
-        pass
+        for query_id, query_data in inference_data.items():
+
+            # clear
+            query = []
+            query_doc = []
+            query_doc_position = []
+
+            if query_id in self.cached_queries_tokenized:
+                tokenized_query = self.cached_queries_tokenized[query_id]
+            else:
+                tokenized_query = self.tokenizer.tokenize_query(query_data["query"])
+                tokenized_query = pad_sequences([tokenized_query], maxlen=Q, padding="post")[0]
+                self.cached_queries_tokenized[query_id] = tokenized_query
+
+            for doc_data in query_data["documents"]:
+
+                if doc_data["id"] in self.cached_articles_tokenized:
+                    tokenized_doc = self.cached_articles_tokenized[doc_data["id"]]
+                else:
+                    tokenized_doc = self.tokenizer.tokenize_article(doc_data["original"])
+                    self.cached_articles_tokenized[doc_data["id"]] = tokenized_doc
+
+                doc_snippets, doc_snippets_position = self.__snippet_interaction(tokenized_query, tokenized_doc, Q, P, S)
+
+                query.append(tokenized_query)
+                query_doc.append(doc_snippets)
+                query_doc_position.append(doc_snippets_position)
+
+            X = [np.array(query), np.array(query_doc), np.array(query_doc_position)]
+            yield X, map(lambda x: {"id": x["id"], "original": x["original"]}, query_data["documents"]), query_id, query_data["query"]
 
     def __snippet_interaction(self, tokenized_query, tokenized_article, Q, P, S):
 
