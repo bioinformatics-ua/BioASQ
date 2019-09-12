@@ -72,4 +72,4 @@ class Queries:
             self.validation_data.extend(json.load(f))
 
         self.train_data_dict = dict(map(lambda x: (x["query_id"], {"documents": x["documents"], "query": x["query"]}), self.train_data))
-        self.validation_data_dict = dict(map(lambda x: (x["query_id"], {"documents": x["documents"], "query": x["query"]}), self.validation_data_dict))
+        self.validation_data_dict = dict(map(lambda x: (x["query_id"], {"documents": x["documents"], "query": x["query"]}), self.validation_data))

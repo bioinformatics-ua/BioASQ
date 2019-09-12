@@ -23,11 +23,13 @@ class DeepRank(ModelAPI):
                  top_k,
                  tokenizer,
                  embedding,
+                 evaluation,
                  **kwargs):
 
         self.top_k = top_k
         self.cache_folder = cache_folder
         self.prefix_name = prefix_name
+        self.evaluation = evaluation  # TODO is not been used
         self.config = kwargs
         self.deeprank_model = None
 
@@ -57,7 +59,7 @@ class DeepRank(ModelAPI):
         return exists(self.__training_data_file_name(**kwargs))
 
     def __training_data_file_name(self, origin, **kwargs):
-        return join(self.cache_folder, "O{}_T{}_M{}_cache_traing_data.p".format(origin, self.tokenizer.name, self.name))
+        return join(self.cache_folder, "O{}_T{}_cache_traing_data.p".format(origin, self.tokenizer.name))
 
     def prepare_training_data(self, corpora, queries, retrieved, **kwargs):
 
@@ -70,10 +72,12 @@ class DeepRank(ModelAPI):
         collection_ids = set(articles.keys())
 
         training_data = {}
-
+        print("[DeepRank] Prepare the training data")
         # select irrelevant and particly irrelevant articles
-        for query_id, query_data in queries.train_data_dict.items():
-            log.info("[DeepRank] Prepare query {}".format(query_id))
+        for i, items in enumerate(queries.train_data_dict.items()):
+
+            query_id, query_data = items
+            log.info("[DeepRank] Prepare query {} id:{}".format(i, query_id))
             partially_positive_ids = set(map(lambda x: x["id"], retrieved["train"][query_id]["documents"]))
             retrieved_positive_ids = set(filter(lambda x: x in partially_positive_ids, query_data["documents"]))
 
@@ -226,19 +230,21 @@ class DeepRank(ModelAPI):
 
         if not simulation:
             # train the network
-            self.train_network(training_data=train_data, **self.config)
+            self.train_network(training_data=train_data, validation_data=kwargs["retrieved"]["validation"], queries=queries, **self.config)
 
             # save current weights of the model
             self.deeprank_model.save_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)))
 
         return model_output
 
-    def inference(self, simulation=False, **kwargs):
-
+    def inference(self, data_to_infer, simulation=False, **kwargs):
+        """
+        data_to_infer: dict {query_id: {query:<str>, documents:<list with documents>}}
+        """
         steps = kwargs["steps"]
         model_output = {"origin": self.name,
                         "steps": steps,
-                        "query_out": {}
+                        "retrieved": {}
                         }
 
         # lazzy build
@@ -255,7 +261,7 @@ class DeepRank(ModelAPI):
                 log.warning("[DeepRank] Missing weights for deeprank, it will use the random initialized weights")
 
         if not simulation:
-            inference_generator = self.inference_generator(inference_data=kwargs["query_out"], input_network=self.config["input_network"], **kwargs)
+            inference_generator = self.inference_generator(inference_data=data_to_infer, input_network=self.config["input_network"], **kwargs)
             for i, gen_data in enumerate(inference_generator):
                 X, docs_ids, query_id, query = gen_data
                 log.info("[DeepRank] inference for  {}-{}".format(i, query_id))
@@ -265,12 +271,12 @@ class DeepRank(ModelAPI):
                 merge_scores_ids.sort(key=lambda x: -x[1])
                 merge_scores_ids = merge_scores_ids[:self.top_k]
                 log.info(merge_scores_ids)
-                model_output["query_out"][query_id] = {"query": query,
+                model_output["retrieved"][query_id] = {"query": query,
                                                        "documents": list(map(lambda x: x[0], merge_scores_ids))}
 
         return model_output
 
-    def train_network(self, training_data, hyperparameters, **kwargs):
+    def train_network(self, training_data, validation_data, queries, hyperparameters, **kwargs):
         print("[DeepRank] Start training")
         epochs = hyperparameters["epoch"]
         batch_size = hyperparameters["batch_size"]
@@ -279,7 +285,14 @@ class DeepRank(ModelAPI):
         training_generator = self.training_generator(training_data, hyperparameters, **kwargs)
 
         # sub sample the validation set because to speed up training
-        int(len(training_data["validation"])*0.15)
+        sub_set_validation_size = int(len(validation_data)*0.15)
+        sub_set_validation = dict(sample(validation_data.items(), sub_set_validation_size))
+        # build gold_standard # queries.validation_data_dict
+        sub_set_validation_gold_standard = {}
+        for key in sub_set_validation.keys():
+            sub_set_validation_gold_standard[key] = queries.validation_data_dict[key]["documents"]
+
+        dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
 
         for epoch in range(epochs):
             loss_per_epoch = []
@@ -298,7 +311,14 @@ class DeepRank(ModelAPI):
 
             if epoch % 10 == 0:
                 # compute validation score!
-                pass
+                sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, **kwargs)["retrieved"]
+                self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
+
+        loss.append(loss_per_epoach)
+
+    def show_evaluation(self, dict_results, gold_standard):
+        print(dict_results)
+        raise NotImplementedError()
 
     # DATA GENERATOR FOR THIS MODEL
     def training_generator(self, training_data, hyperparameters, input_network, **kwargs):
@@ -315,6 +335,8 @@ class DeepRank(ModelAPI):
         query_positive_doc_position = []
         query_negative_doc = []
         query_negative_doc_position = []
+
+        list_keys = list(training_data["train"].keys())
 
         # generator loop
         while True:
@@ -338,7 +360,8 @@ class DeepRank(ModelAPI):
                 query_negative_doc_position = []
             else:
                 # select a random
-                query_id, query_data = choice(training_data["train"].items())
+                query_id = choice(list_keys)
+                query_data = training_data["train"][query_id]
 
                 # padding the query
                 tokenized_query = pad_sequences([query_data["query"]], maxlen=Q, padding="post")[0]

@@ -18,6 +18,7 @@ pipeline:
         evaluation: true
     - DeepRank:
         top_k: 10
+        evaluation: true
         tokenizer:
             Regex:
                 n_process: 20

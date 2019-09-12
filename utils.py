@@ -47,7 +47,7 @@ class LimitedDict(dict):
         super().__init__(*args, **kw)
         self.max_entry_limit = limit
         self.current_elments = 0
-        # list where tail is least freq
+        # list where head is least freq and tail is the most frequent
         self.frequency_list = deque(maxlen=self.max_entry_limit)
 
     def __update_frequency(self, key):
@@ -62,11 +62,11 @@ class LimitedDict(dict):
 
         if self.current_elments < self.max_entry_limit:
             super().__setitem__(key, value)
-            self.frequency_list.append(key)  # add right
+            self.frequency_list.append(key)  # add right (tail)
             self.current_elments += 1
         else:
             # free least used
-            remove_key = self.frequency_list.popleft()  # pop left
+            remove_key = self.frequency_list.popleft()  # pop left (head)
             super().__delitem__(remove_key)
 
             # add
