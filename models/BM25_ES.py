@@ -81,13 +81,13 @@ class BM25_ES(ModelAPI):
         with open(join(self.cache_folder, self.name), "w") as f:
             json.dump({}, f)
 
-    def retrieve_for_queries(self, query_data, name):
+    def retrieve_for_queries(self, query_data):
         """
         query_data: list {query:<str>, query_id:<int>, (optinal non relevant for this function) documents:<list - str>}
         """
         # TODO: Check elasticsearch for batch queries has a way of impriving
         retrieved_results = {}
-        print("[BM25] Runing inference over data {}".format(name))
+        print("[BM25] Runing inference over data")
         for i, query_data in enumerate(query_data):
             query = ' '.join(map(lambda x: str(x), self.tokenizer.texts_to_sequences([query_data["query"]])[0]))
             query_es = {'query': {'bool': {'must': [{'query_string': {'query': query, 'analyze_wildcard': True}}], 'filter': [], 'should': [], 'must_not': []}}}
@@ -112,6 +112,7 @@ class BM25_ES(ModelAPI):
         model_output = {"origin": self.name,
                         "corpora": corpora,
                         "queries": queries,
+                        "retrieved": {},
                         "steps": steps}
 
         if "simulation" in kwargs:
@@ -148,23 +149,47 @@ class BM25_ES(ModelAPI):
             steps.append("[MISS] BM25 INFERENCE")
             if not simulation:
                 # run inference
-                retrieved = self.inference(**kwargs)
+                model_output["retrieved"]["train"] = self.inference(data_to_infer=queries.train_data, **kwargs)["retrieved"]
+                model_output["retrieved"]["validation"] = self.inference(data_to_infer=queries.validation_data, **kwargs)["retrieved"]
                 # save
                 log.info("[BM25] Saving the retrieved documents in {}".format(path_cache_output))
                 with open(path_cache_output, "wb") as f:
-                    pickle.dump(retrieved, f)
+                    pickle.dump(model_output["retrieved"], f)
         else:
             steps.append("[READY] BM25 INFERENCE")
             if not simulation:
                 log.info("[BM25] Load the retrieved documents from {}".format(path_cache_output))
                 with open(path_cache_output, "rb") as f:
                     retrieved = pickle.load(f)
-                # rerun the show_evaluation
-                if self.evaluation:
-                    self.show_evaluation(retrieved["retrieved"], queries)
 
                 # add to the output
-                model_output["retrieved"] = retrieved["retrieved"]
+                model_output["retrieved"] = retrieved
+
+            # rerun the show_evaluation
+            if not simulation and self.evaluation:
+                self.show_evaluation(model_output["retrieved"], queries)
+
+        return model_output
+
+    def inference(self, data_to_infer, **kwargs):
+        steps = kwargs["steps"]
+        model_output = {"origin": self.name,
+                        "steps": steps}
+
+        if "simulation" in kwargs:
+            simulation = kwargs["simulation"]
+        else:
+            simulation = False
+
+        if not self.is_trained():
+            steps.append("[MISS/CRITICAL] BM25 TRAIN")
+            if not simulation:
+                raise Exception("BM25 is not trained")
+        else:
+            steps.append("[READY] BM25 INFERENCE")
+            if not simulation:
+                # code to infer over the queries
+                model_output["retrieved"] = self.retrieve_for_queries(data_to_infer)
 
         return model_output
 
@@ -183,6 +208,7 @@ class BM25_ES(ModelAPI):
         return predictions, expectations
 
     def show_evaluation(self, dict_results, queries):
+
         pred_train, expect_train = self.__prepare_data(dict_results["train"], queries.train_data)
         pred_validation, expect_validation = self.__prepare_data(dict_results["validation"], queries.validation_data)
 
@@ -195,40 +221,3 @@ class BM25_ES(ModelAPI):
         recall = "[BM25] Normal RECALL@{}: {}".format(self.top_k, f_recall(pred_train, expect_train, at=self.top_k))
         print(recall)
         log.info(recall)
-
-    def inference(self, **kwargs):
-        steps = kwargs["steps"]
-        model_output = {"origin": self.name,
-                        "steps": steps}
-
-        if "simulation" in kwargs:
-            simulation = kwargs["simulation"]
-        else:
-            simulation = False
-
-        if not self.is_trained():
-            steps.append("[MISS/CRITICAL] BM25 TRAIN")
-            if not simulation:
-                raise Exception("BM25 is not trained")
-        else:
-            steps.append("[READY] BM25 INFERENCE")
-            if not simulation:
-                # code to infer over the queries
-                if "queries" in kwargs:
-                    queries = kwargs["queries"]
-                    train_out = self.retrieve_for_queries(queries.train_data, "train")
-                    validation_out = self.retrieve_for_queries(queries.validation_data, "validation")
-                    model_output["retrieved"] = {"train": train_out, "validation": validation_out}
-
-                    # perform evaluation
-                    if self.evaluation:
-                        self.show_evaluation(model_output["retrieved"], queries)
-                        
-                elif "query" in kwargs:
-                    query = kwargs["query"]
-                    model_output["query"] = query
-
-                    # RUN A SINGLE Query
-                    model_output["query_out"] = self.retrieve_for_queries(query, "query")
-
-        return model_output
