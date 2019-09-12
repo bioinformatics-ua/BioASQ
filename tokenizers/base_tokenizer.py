@@ -83,7 +83,7 @@ class BaseTokenizer:
                  char_level=False,
                  oov_token=None,
                  document_count=0,
-                 n_process=4,
+                 n_process=20,
                  **kwargs):
 
         self.prefix_name = prefix_name
