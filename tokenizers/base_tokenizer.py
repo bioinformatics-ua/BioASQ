@@ -6,6 +6,7 @@ But the original source code can be found on: https://www.tensorflow.org/version
 from collections import OrderedDict
 from collections import defaultdict
 import tempfile
+import pickle
 import shutil
 import json
 import os
@@ -28,6 +29,25 @@ def fitTokenizeJob(proc_id, articles, _class, merge_tokenizer_path, properties):
 
     tk.save_to_json(path=os.path.join(merge_tokenizer_path, file_name))
     del tk
+    print("[Process-{}] Ended".format(proc_id))
+
+
+def tokenizeJob(proc_id, texts, _class, merge_tokenizer_path, properties, kwargs):
+    print("[Process-{}] Started".format(proc_id))
+    sys.stdout.flush()
+    # load tokenizer
+    tokenizer = _class.maybe_load(**properties)
+
+    # ALL THREADS RUN THIS
+    tokenized_texts = tokenizer.tokenize_texts(texts, **kwargs)
+    del texts
+
+    file_name = "tokenized_text_{0:03}.p".format(proc_id)
+    print("[Process-{}]: Store {}".format(proc_id, file_name))
+
+    with open(os.path.join(merge_tokenizer_path, file_name), "wb") as f:
+        pickle.dump(tokenized_texts, f)
+
     print("[Process-{}] Ended".format(proc_id))
 
 
@@ -309,6 +329,9 @@ class BaseTokenizer:
     def load_from_json(path):
         raise NotImplementedError()
 
+    def get_properties(self):
+        raise NotImplementedError()
+
     def fit_tokenizer_multiprocess(self, corpora_iterator):
         merge_tokenizer_path = tempfile.mkdtemp()
 
@@ -386,3 +409,49 @@ class BaseTokenizer:
             # always remove the temp directory
             log.info("[TOKENIZER] Remove {}".format(merge_tokenizer_path))
             shutil.rmtree(merge_tokenizer_path)
+
+    def tokenizer_multiprocess(self, texts, **kwargs):
+        merge_tokenizer_path = tempfile.mkdtemp()
+        tokenized_texts = []
+
+        try:
+            # initialization of the process
+            def tokenizer_process_init(proc_id, texts):
+                return Process(target=tokenizeJob, args=(proc_id, texts, self.__class__, merge_tokenizer_path, self.get_properties(), kwargs))
+
+            # multiprocess loop
+            process = []
+
+            t_len = len(texts)
+            t_itter = t_len//self.n_process
+
+            for k, j in enumerate(range(0, t_len, t_itter)):
+                process.append(tokenizer_process_init(k, texts[j:j+t_itter]))
+
+            print("[MULTIPROCESS LOOP] Starting", self.n_process, "process")
+            for p in process:
+                p.start()
+
+            print("[MULTIPROCESS LOOP] Wait", self.n_process, "process")
+            for p in process:
+                p.join()
+            gc.collect()
+
+            # merge the tokenizer
+            print("[TOKENIZER] Merge tokenized files")
+            files = sorted(os.listdir(merge_tokenizer_path))
+            del texts
+
+            for file in files:
+                log.info("[TOKENIZER] Load {}".format(file))
+                with open(os.path.join(merge_tokenizer_path, file), "rb") as f:
+                    tokenized_texts.extend(pickle.load(f))
+
+        except Exception as e:
+            raise e
+        finally:
+            # always remove the temp directory
+            log.info("[TOKENIZER] Remove {}".format(merge_tokenizer_path))
+            shutil.rmtree(merge_tokenizer_path)
+
+        return tokenized_texts

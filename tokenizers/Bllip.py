@@ -79,3 +79,6 @@ class Bllip(BaseTokenizer):
             return Bllip.load_from_json(path)
 
         return Bllip(stem, cache_folder=cache_folder, prefix_name=prefix_name, **kwargs)
+
+    def tokenize_texts(self, texts, **kwargs):
+        return self.texts_to_sequences(texts)

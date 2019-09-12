@@ -70,6 +70,8 @@ class DeepRank(ModelAPI):
         collection_ids = set(articles.keys())
 
         training_data = {}
+
+        print("queries.train_data_dict", len(queries.train_data_dict))
         # select irrelevant and particly irrelevant articles
         for query_id, query_data in queries.train_data_dict.items():
             log.info("[DeepRank] Prepare query {}".format(query_id))
@@ -82,7 +84,7 @@ class DeepRank(ModelAPI):
                 continue
             # irrelevant ids
             irrelevant_ids = (collection_ids-retrieved_positive_ids)-partially_positive_ids
-            num_irrelevant_ids = 10*len(partially_positive_ids)
+            num_irrelevant_ids = 25000  # 5*len(partially_positive_ids)
             num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
             irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
@@ -103,7 +105,10 @@ class DeepRank(ModelAPI):
 
         print("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
         log.info("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
-        tokenized_articles = {id: self.tokenizer.tokenize_article(articles[id]) for id in used_articles_ids}
+        used_articles = {id: articles[id] for id in used_articles_ids}
+        articles_ids, articles_texts = tuple(zip(*list(used_articles.items())))
+        tokenized_articles = self.tokenizer.tokenizer_multiprocess(articles_texts, mode="articles")
+        tokenized_articles = dict(zip(articles_ids, tokenized_articles))
 
         del articles
         log.info("[DeepRank] Call garbage collector {}".format(gc.collect()))
@@ -278,7 +283,7 @@ class DeepRank(ModelAPI):
             for step in range(steps):
 
                 X = next(training_generator)
-                print(X)
+
                 start = time.time()
                 loss_per_epoch.append(self.trainable_deep_rank.train_on_batch(X))
                 print("Step:", step,
@@ -287,6 +292,10 @@ class DeepRank(ModelAPI):
                       "| current min loss:", np.min(loss_per_epoch),
                       "| time:", time.time()-start,
                       end="\r")
+
+            if epoch % 10 == 0:
+                # compute validation score!
+                pass
 
     # DATA GENERATOR FOR THIS MODEL
     def training_generator(self, training_data, hyperparameters, input_network, **kwargs):

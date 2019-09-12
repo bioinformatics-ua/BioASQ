@@ -32,6 +32,21 @@ class Regex(BaseTokenizer):
     def get_properties(self):
         return {"cache_folder": self.cache_folder, "prefix_name": self.prefix_name, "stem": self.stem}
 
+    def tokenize_texts(self, texts, **kwargs):
+
+        if kwargs["mode"] == "queries":
+            flag = self.queries_sw
+        elif kwargs["mode"] == "articles":
+            flag = self.articles_sw
+
+        tokenized_texts = self.texts_to_sequences(texts)
+        if flag:
+            if self.stop_words is None:  # lazzy initialization
+                self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
+            tokenized_texts = [token for token in tokenized_texts if token not in self.stop_words_tokenized]
+
+        return tokenized_texts
+
     def tokenize_query(self, query):
         tokenized_query = self.texts_to_sequences([query])[0]
         if self.queries_sw:
