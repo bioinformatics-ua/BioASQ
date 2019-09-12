@@ -71,7 +71,6 @@ class DeepRank(ModelAPI):
 
         training_data = {}
 
-        print("queries.train_data_dict", len(queries.train_data_dict))
         # select irrelevant and particly irrelevant articles
         for query_id, query_data in queries.train_data_dict.items():
             log.info("[DeepRank] Prepare query {}".format(query_id))
@@ -84,7 +83,7 @@ class DeepRank(ModelAPI):
                 continue
             # irrelevant ids
             irrelevant_ids = (collection_ids-retrieved_positive_ids)-partially_positive_ids
-            num_irrelevant_ids = 25000  # 5*len(partially_positive_ids)
+            num_irrelevant_ids = 10000  # 5*len(partially_positive_ids)
             num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
             irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
@@ -249,10 +248,11 @@ class DeepRank(ModelAPI):
 
             name = join(self.cache_folder, "last_weights_{}.h5".format(self.name))
             if exists(name):
-                print("LOAD FROM CACHE Weights for deeprank")
+                print("LOAD FROM CACHE DeepRank weights")
                 self.deeprank_model.load_weights(name)
             else:
-                steps.append("[MISS] Weights for deeprank")
+                steps.append("[MISS] DeepRank weights")
+                log.warning("[DeepRank] Missing weights for deeprank, it will use the random initialized weights")
 
         if not simulation:
             inference_generator = self.inference_generator(inference_data=kwargs["query_out"], input_network=self.config["input_network"], **kwargs)
@@ -277,6 +277,9 @@ class DeepRank(ModelAPI):
         steps = max(1, len(training_data["train"])//batch_size)
         loss = []
         training_generator = self.training_generator(training_data, hyperparameters, **kwargs)
+
+        # sub sample the validation set because to speed up training
+        int(len(training_data["validation"])*0.15)
 
         for epoch in range(epochs):
             loss_per_epoch = []
