@@ -120,13 +120,18 @@ class DeepRank(ModelAPI):
         # same index id, article
         articles_ids = list(used_articles_ids)
         articles_texts = [articles[id] for id in articles_ids]
+
+        # clear memory
+        del articles
+        print("[GC]", gc.collect())
+
         log.debug("[DeepRank] before multiprocess tokenization {} == {}".format(len(articles_ids), len(articles_texts)))
         tokenized_articles = self.tokenizer.tokenizer_multiprocess(articles_texts, mode="articles")
         log.debug("[DeepRank] after multiprocess tokenization {} == {}".format(len(articles_ids), len(tokenized_articles)))
         tokenized_articles = dict(zip(articles_ids, tokenized_articles))
         log.debug("[DeepRank] {} == {}".format(len(articles_ids), len(tokenized_articles)))
 
-        del articles
+
         log.info("[DeepRank] Call garbage collector {}".format(gc.collect()))
 
         data = {"train": training_data, "articles": tokenized_articles}
