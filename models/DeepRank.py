@@ -368,18 +368,18 @@ class DeepRank(ModelAPI):
 
                 for j in range(num_partilly_positives_samples+num_negatives_samples):
                     positive_article_id = choice(query_data["positive_ids"])
-                    positive_tokenized_article = training_data["train"]["articles"][positive_article_id]
+                    positive_tokenized_article = training_data["articles"][positive_article_id]
 
                     positive_snippets, positive_snippets_position = self.__snippet_interaction(tokenized_query, positive_tokenized_article, Q, P, S)
 
                     if j < num_partilly_positives_samples:
                         partially_positive_article_id = choice(query_data["partially_positive_ids"])
-                        partially_positive_tokenized_article = training_data["train"]["articles"][partially_positive_article_id]
+                        partially_positive_tokenized_article = training_data["articles"][partially_positive_article_id]
 
                         negative_snippets, negative_snippets_position = self.__snippet_interaction(tokenized_query, partially_positive_tokenized_article, Q, P, S)
                     else:
                         negative_article_id = choice(query_data["irrelevant_ids"])
-                        negative_tokenized_article = training_data["train"]["articles"][negative_article_id]
+                        negative_tokenized_article = training_data["articles"][negative_article_id]
 
                         negative_snippets, negative_snippets_position = self.__snippet_interaction(tokenized_query, negative_tokenized_article, Q, P, S)
 
