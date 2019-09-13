@@ -109,6 +109,10 @@ class DeepRank(ModelAPI):
         print("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
         log.info("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
 
+        # checkpoint
+        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "wb") as f:
+            pickle.dump(training_data, f)
+
         # same index id, article
         articles_ids = list(used_articles_ids)
         articles_texts = [articles[id] for id in articles_ids]

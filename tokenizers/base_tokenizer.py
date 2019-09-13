@@ -420,22 +420,27 @@ class BaseTokenizer:
                 return Process(target=tokenizeJob, args=(proc_id, texts, self.__class__, merge_tokenizer_path, self.get_properties(), kwargs))
 
             # multiprocess loop
-            process = []
+            itter = 1000000
+            for i, l in enumerate(range(0, len(texts), itter)):
+                process = []
 
-            t_len = len(texts)
-            t_itter = t_len//self.n_process
+                docs = texts[l:l+itter]
+                t_len = len(docs)
+                t_itter = t_len//self.n_process
 
-            for k, j in enumerate(range(0, t_len, t_itter)):
-                process.append(tokenizer_process_init(k, texts[j:j+t_itter]))
+                for k, j in enumerate(range(0, t_len, t_itter)):
+                    process.append(tokenizer_process_init(i*self.n_process+k, docs[j:j+t_itter]))
 
-            print("[MULTIPROCESS LOOP] Starting", self.n_process, "process")
-            for p in process:
-                p.start()
+                print("[MULTIPROCESS LOOP] Starting", self.n_process, "process")
+                for p in process:
+                    p.start()
 
-            print("[MULTIPROCESS LOOP] Wait", self.n_process, "process")
-            for p in process:
-                p.join()
-            gc.collect()
+                print("[MULTIPROCESS LOOP] Wait", self.n_process, "process")
+                for p in process:
+                    p.join()
+
+                del docs
+                gc.collect()
 
             # merge the tokenizer
             print("[TOKENIZER] Merge tokenized files")
