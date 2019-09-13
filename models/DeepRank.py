@@ -108,10 +108,15 @@ class DeepRank(ModelAPI):
 
         print("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
         log.info("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
-        used_articles = {id: articles[id] for id in used_articles_ids}
-        articles_ids, articles_texts = tuple(zip(*list(used_articles.items())))
+
+        # same index id, article
+        articles_ids = list(used_articles_ids)
+        articles_texts = [articles[id] for id in articles_ids]
+        log.debug("[DeepRank] before multiprocess tokenization {} == {}".format(len(articles_ids), len(articles_texts)))
         tokenized_articles = self.tokenizer.tokenizer_multiprocess(articles_texts, mode="articles")
+        log.debug("[DeepRank] after multiprocess tokenization {} == {}".format(len(articles_ids), len(tokenized_articles)))
         tokenized_articles = dict(zip(articles_ids, tokenized_articles))
+        log.debug("[DeepRank] {} == {}".format(len(articles_ids), len(tokenized_articles)))
 
         del articles
         log.info("[DeepRank] Call garbage collector {}".format(gc.collect()))
@@ -281,7 +286,7 @@ class DeepRank(ModelAPI):
         epochs = hyperparameters["epoch"]
         batch_size = hyperparameters["batch_size"]
         steps = max(1, len(training_data["train"])//batch_size)
-        loss = []
+
         training_generator = self.training_generator(training_data, hyperparameters, **kwargs)
 
         # sub sample the validation set because to speed up training
@@ -302,19 +307,18 @@ class DeepRank(ModelAPI):
 
                 start = time.time()
                 loss_per_epoch.append(self.trainable_deep_rank.train_on_batch(X))
-                print("Step:", step,
-                      "| loss:", loss_per_epoch[-1],
-                      "| current max loss:", np.max(loss_per_epoch),
-                      "| current min loss:", np.min(loss_per_epoch),
-                      "| time:", time.time()-start,
-                      end="\r")
+                _train_line_info = "Step: {} | loss: {} | current max loss: {} | current min loss: {} | time: {}".format(step,
+                                                                                                                         loss_per_epoch[-1],
+                                                                                                                         np.max(loss_per_epoch),
+                                                                                                                         np.min(loss_per_epoch),
+                                                                                                                         time.time()-start)
+                print(_train_line_info, end="\r")
+                log.info(_train_line_info)
 
             if epoch % 10 == 0:
                 # compute validation score!
                 sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, **kwargs)["retrieved"]
                 self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
-
-        loss.append(loss_per_epoach)
 
     def show_evaluation(self, dict_results, gold_standard):
         print(dict_results)
