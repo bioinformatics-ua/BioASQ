@@ -33,7 +33,8 @@ def fitTokenizeJob(proc_id, articles, _class, merge_tokenizer_path, properties):
 
 
 def tokenizeJob(proc_id, texts, _class, merge_tokenizer_path, properties, kwargs):
-    print("[Process-{}] Started".format(proc_id))
+    print("[Process-{}] Started articles size {}".format(proc_id, len(texts)))
+
     sys.stdout.flush()
     # load tokenizer
     tokenizer = _class.maybe_load(**properties)
@@ -47,6 +48,9 @@ def tokenizeJob(proc_id, texts, _class, merge_tokenizer_path, properties, kwargs
 
     with open(os.path.join(merge_tokenizer_path, file_name), "wb") as f:
         pickle.dump(tokenized_texts, f)
+
+    del tokenized_texts
+    gc.collect()
 
     print("[Process-{}] Ended".format(proc_id))
 

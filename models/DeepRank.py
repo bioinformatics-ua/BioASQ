@@ -74,27 +74,35 @@ class DeepRank(ModelAPI):
         training_data = {}
         print("[DeepRank] Prepare the training data")
         # select irrelevant and particly irrelevant articles
-        for i, items in enumerate(queries.train_data_dict.items()):
+        DEBUG_JUMP = True
+        if not DEBUG_JUMP:
+            for i, items in enumerate(queries.train_data_dict.items()):
 
-            query_id, query_data = items
-            log.info("[DeepRank] Prepare query {} id:{}".format(i, query_id))
-            partially_positive_ids = set(map(lambda x: x["id"], retrieved["train"][query_id]["documents"]))
-            retrieved_positive_ids = set(filter(lambda x: x in partially_positive_ids, query_data["documents"]))
+                query_id, query_data = items
+                log.info("[DeepRank] Prepare query {} id:{}".format(i, query_id))
+                partially_positive_ids = set(map(lambda x: x["id"], retrieved["train"][query_id]["documents"]))
+                retrieved_positive_ids = set(filter(lambda x: x in partially_positive_ids, query_data["documents"]))
 
-            if len(retrieved_positive_ids) == 0:
-                log.warning("[DeepRank] Query {} does not have any positive articles, action=skip".format(query_id))
-                # skip
-                continue
-            # irrelevant ids
-            irrelevant_ids = (collection_ids-retrieved_positive_ids)-partially_positive_ids
-            num_irrelevant_ids = 10000  # 5*len(partially_positive_ids)
-            num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
-            irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
+                if len(retrieved_positive_ids) == 0:
+                    log.warning("[DeepRank] Query {} does not have any positive articles, action=skip".format(query_id))
+                    # skip
+                    continue
+                # irrelevant ids
+                irrelevant_ids = (collection_ids-retrieved_positive_ids)-partially_positive_ids
+                num_irrelevant_ids = 10000  # 5*len(partially_positive_ids)
+                num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
+                irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
-            training_data[query_id] = {"positive_ids": list(retrieved_positive_ids),
-                                       "partially_positive_ids": list(partially_positive_ids),
-                                       "irrelevant_ids": list(irrelevant_ids),
-                                       "query": self.tokenizer.tokenize_query(query_data["query"])}
+                training_data[query_id] = {"positive_ids": list(retrieved_positive_ids),
+                                           "partially_positive_ids": list(partially_positive_ids),
+                                           "irrelevant_ids": list(irrelevant_ids),
+                                           "query": self.tokenizer.tokenize_query(query_data["query"])}
+
+        # manual load checkpoint
+        # checkpoint
+        print("LOAD")
+        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
+            training_data = pickle.laod(f)
 
         # total ids
         used_articles_ids = set()
@@ -108,10 +116,6 @@ class DeepRank(ModelAPI):
 
         print("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
         log.info("[DeepRank] Total ids selected for training {}".format(len(used_articles_ids)))
-
-        # checkpoint
-        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "wb") as f:
-            pickle.dump(training_data, f)
 
         # same index id, article
         articles_ids = list(used_articles_ids)
