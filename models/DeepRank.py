@@ -102,7 +102,7 @@ class DeepRank(ModelAPI):
         # checkpoint
         print("LOAD")
         with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
-            training_data = pickle.laod(f)
+            training_data = pickle.load(f)
 
         # total ids
         used_articles_ids = set()
@@ -259,7 +259,10 @@ class DeepRank(ModelAPI):
         """
         data_to_infer: dict {query_id: {query:<str>, documents:<list with documents>}}
         """
-        steps = kwargs["steps"]
+        if "steps" in kwargs:
+            steps = kwargs["steps"]
+        else:
+            steps = []
         model_output = {"origin": self.name,
                         "steps": steps,
                         "retrieved": {}
@@ -279,7 +282,7 @@ class DeepRank(ModelAPI):
                 log.warning("[DeepRank] Missing weights for deeprank, it will use the random initialized weights")
 
         if not simulation:
-            inference_generator = self.inference_generator(inference_data=data_to_infer, input_network=self.config["input_network"], **kwargs)
+            inference_generator = self.inference_generator(inference_data=data_to_infer, **kwargs)
             for i, gen_data in enumerate(inference_generator):
                 X, docs_ids, query_id, query = gen_data
                 log.info("[DeepRank] inference for  {}-{}".format(i, query_id))
@@ -288,7 +291,7 @@ class DeepRank(ModelAPI):
                 merge_scores_ids = list(zip(docs_ids, scores))
                 merge_scores_ids.sort(key=lambda x: -x[1])
                 merge_scores_ids = merge_scores_ids[:self.top_k]
-                log.info(merge_scores_ids)
+                #log.info(merge_scores_ids)
                 model_output["retrieved"][query_id] = {"query": query,
                                                        "documents": list(map(lambda x: x[0], merge_scores_ids))}
 
@@ -310,7 +313,8 @@ class DeepRank(ModelAPI):
         for key in sub_set_validation.keys():
             sub_set_validation_gold_standard[key] = queries.validation_data_dict[key]["documents"]
 
-        dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
+        loss = []#dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
+
 
         for epoch in range(epochs):
             loss_per_epoch = []
@@ -327,15 +331,20 @@ class DeepRank(ModelAPI):
                                                                                                                          time.time()-start)
                 print(_train_line_info, end="\r")
                 log.info(_train_line_info)
+                loss.append(loss_per_epoch)
+            print()
+            print("", end="\r")
+            print("Epoach:", epoch,"| avg loss:", np.mean(loss[-1]),"| max loss:", np.max(loss[-1]), "| min loss:", np.min(loss[-1]))
 
-            if epoch % 10 == 0:
+            if epoch % 100 == 0:
+                print("Evaluation")
                 # compute validation score!
                 sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, **kwargs)["retrieved"]
                 self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
 
     def show_evaluation(self, dict_results, gold_standard):
-        print(dict_results)
-        raise NotImplementedError()
+        pass#print(dict_results)
+        #raise NotImplementedError()
 
     # DATA GENERATOR FOR THIS MODEL
     def training_generator(self, training_data, hyperparameters, input_network, **kwargs):

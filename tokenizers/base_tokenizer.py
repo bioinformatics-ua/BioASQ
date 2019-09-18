@@ -87,7 +87,7 @@ class BaseTokenizer:
                  char_level=False,
                  oov_token=None,
                  document_count=0,
-                 n_process=20,
+                 n_process=4,
                  **kwargs):
 
         self.prefix_name = prefix_name
@@ -424,7 +424,7 @@ class BaseTokenizer:
                 return Process(target=tokenizeJob, args=(proc_id, texts, self.__class__, merge_tokenizer_path, self.get_properties(), kwargs))
 
             # multiprocess loop
-            itter = 1000000
+            itter = 100000
             for i, l in enumerate(range(0, len(texts), itter)):
                 process = []
 
