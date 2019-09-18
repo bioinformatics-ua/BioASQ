@@ -100,9 +100,9 @@ class DeepRank(ModelAPI):
 
         # manual load checkpoint
         # checkpoint
-        print("LOAD")
-        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
-            training_data = pickle.load(f)
+        # print("LOAD")
+        # with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
+        #    training_data = pickle.load(f)
 
         # total ids
         used_articles_ids = set()
@@ -313,8 +313,7 @@ class DeepRank(ModelAPI):
         for key in sub_set_validation.keys():
             sub_set_validation_gold_standard[key] = queries.validation_data_dict[key]["documents"]
 
-        loss = []#dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
-
+        loss = []  # dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
 
         for epoch in range(epochs):
             loss_per_epoch = []
@@ -332,9 +331,15 @@ class DeepRank(ModelAPI):
                 print(_train_line_info, end="\r")
                 log.info(_train_line_info)
                 loss.append(loss_per_epoch)
+
+            _train_line_info = "Epoch: {} | avg loss: {} | max loss: {} | min loss: {}".format(epoch,
+                                                                                               np.mean(loss[-1]),
+                                                                                               np.max(loss[-1]),
+                                                                                               np.min(loss[-1]))
+            log.info(_train_line_info)
             print()
             print("", end="\r")
-            print("Epoach:", epoch,"| avg loss:", np.mean(loss[-1]),"| max loss:", np.max(loss[-1]), "| min loss:", np.min(loss[-1]))
+            print(_train_line_info)
 
             if epoch % 100 == 0:
                 print("Evaluation")
@@ -343,8 +348,9 @@ class DeepRank(ModelAPI):
                 self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
 
     def show_evaluation(self, dict_results, gold_standard):
-        pass#print(dict_results)
-        #raise NotImplementedError()
+        log.info(list(dict_results.values())[0])
+        log.info(list(gold_standard.values())[0]))
+        raise NotImplementedError()
 
     # DATA GENERATOR FOR THIS MODEL
     def training_generator(self, training_data, hyperparameters, input_network, **kwargs):
@@ -456,6 +462,10 @@ class DeepRank(ModelAPI):
                 query.append(tokenized_query)
                 query_doc.append(doc_snippets)
                 query_doc_position.append(doc_snippets_position)
+
+            # info state of the cache
+            log.info("size queries in cache {}".format(self.cached_queries_tokenized.current_elments))
+            log.info("size articles in cache {}".format(self.cached_articles_tokenized.current_elments))
 
             X = [np.array(query), np.array(query_doc), np.array(query_doc_position)]
             yield X, map(lambda x: {"id": x["id"], "original": x["original"]}, query_data["documents"]), query_id, query_data["query"]
