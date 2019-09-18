@@ -8,6 +8,7 @@ from logger import log
 from models.subnetworks.input_network import DetectionNetwork
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.optimizers import Adadelta
+from metrics.evaluators import f_map, f_recall
 from random import sample, choice
 from utils import LimitedDict
 import time
@@ -291,7 +292,7 @@ class DeepRank(ModelAPI):
                 merge_scores_ids = list(zip(docs_ids, scores))
                 merge_scores_ids.sort(key=lambda x: -x[1])
                 merge_scores_ids = merge_scores_ids[:self.top_k]
-                #log.info(merge_scores_ids)
+                # log.info(merge_scores_ids)
                 model_output["retrieved"][query_id] = {"query": query,
                                                        "documents": list(map(lambda x: x[0], merge_scores_ids))}
 
@@ -349,8 +350,24 @@ class DeepRank(ModelAPI):
 
     def show_evaluation(self, dict_results, gold_standard):
         log.info(list(dict_results.values())[0])
-        log.info(list(gold_standard.values())[0]))
-        raise NotImplementedError()
+        log.info(list(gold_standard.values())[0])
+
+        predictions = []
+        expectations = []
+
+        for _id in dict_results.keys():
+            expectations.append(gold_standard[_id])
+            predictions.append(dict_results[_id]["id"])
+
+        bioasq_map = "[BM25] BioASQ MAP@10: {}".format(f_map(predictions, expectations, bioASQ=True))
+        print(bioasq_map)
+        log.info(bioasq_map)
+        map = "[BM25] Normal MAP@10: {}".format(f_map(predictions, expectations))
+        print(map)
+        log.info(map)
+        recall = "[BM25] Normal RECALL@{}: {}".format(self.top_k, f_recall(predictions, expectations, at=self.top_k))
+        print(recall)
+        log.info(recall)
 
     # DATA GENERATOR FOR THIS MODEL
     def training_generator(self, training_data, hyperparameters, input_network, **kwargs):
