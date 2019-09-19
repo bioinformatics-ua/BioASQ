@@ -11,6 +11,7 @@ from tensorflow.keras.optimizers import Adadelta
 from metrics.evaluators import f_map, f_recall
 from random import sample, choice
 from utils import LimitedDict
+from heapq import nlargest
 import time
 import numpy as np
 import pickle
@@ -295,8 +296,15 @@ class DeepRank(ModelAPI):
                 log.info("[DeepRank] prediction time: {}".format(time.time()-start_eval_time))
                 scores = map(lambda x: x[0], scores.tolist())
                 merge_scores_ids = list(zip(docs_ids, scores))
+
+                start_eval_time = time.time()
+
                 merge_scores_ids.sort(key=lambda x: -x[1])
                 merge_scores_ids = merge_scores_ids[:self.top_k]
+
+                # merge_scores_ids = nlargest(self.top_k, merge_scores_ids, key=lambda x: x[1])
+
+                log.info("[DeepRank] top k time: {}".format(time.time()-start_eval_time))
                 # log.info(merge_scores_ids)
                 model_output["retrieved"][query_id] = {"query": query,
                                                        "documents": list(map(lambda x: x[0], merge_scores_ids))}
