@@ -252,7 +252,7 @@ class DeepRank(ModelAPI):
             self.train_network(training_data=train_data, validation_data=kwargs["retrieved"]["validation"], queries=queries, **self.config)
 
             # save current weights of the model
-            self.deeprank_model.save_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)))
+            self.deeprank_model.save_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), overwrite=True)
 
         return model_output
 
@@ -260,6 +260,7 @@ class DeepRank(ModelAPI):
         """
         data_to_infer: dict {query_id: {query:<str>, documents:<list with documents>}}
         """
+        start_eval_time = time.time()
         if "steps" in kwargs:
             steps = kwargs["steps"]
         else:
@@ -285,9 +286,13 @@ class DeepRank(ModelAPI):
         if not simulation:
             inference_generator = self.inference_generator(inference_data=data_to_infer, **kwargs)
             for i, gen_data in enumerate(inference_generator):
+                start_eval_time = time.time()
                 X, docs_ids, query_id, query = gen_data
+                log.info("[DeepRank] generate query data time: {}".format(time.time()-start_eval_time))
                 log.info("[DeepRank] inference for  {}-{}".format(i, query_id))
+                start_eval_time = time.time()
                 scores = self.deeprank_model.predict(X)
+                log.info("[DeepRank] prediction time: {}".format(time.time()-start_eval_time))
                 scores = map(lambda x: x[0], scores.tolist())
                 merge_scores_ids = list(zip(docs_ids, scores))
                 merge_scores_ids.sort(key=lambda x: -x[1])
@@ -341,34 +346,42 @@ class DeepRank(ModelAPI):
             print()
             print("", end="\r")
             print(_train_line_info)
+            best_map = 14
 
-            if epoch % 100 == 0:
+            if epoch % 20 == 0:
                 print("Evaluation")
                 # compute validation score!
                 sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, **kwargs)["retrieved"]
-                self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
+                _map = self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
+
+                if _map > best_map:
+                    best_map = _map
+                    validation_scores = self.inference(data_to_infer=validation_data, **kwargs)["retrieved"]
+                    print("Metrics on the full validation set")
+                    self.show_evaluation(validation_scores, queries.validation_data_dict)
 
     def show_evaluation(self, dict_results, gold_standard):
-        #log.info(list(dict_results.values())[0]["documents"])
-        #log.info(list(gold_standard.values())[0])
 
-
+        start_eval_time = time.time()
         predictions = []
         expectations = []
 
         for _id in dict_results.keys():
             expectations.append(gold_standard[_id])
-            predictions.append(list(map(lambda x:x["id"], dict_results[_id]["documents"])))
+            predictions.append(dict_results[_id]["id"])
 
         bioasq_map = "[BM25] BioASQ MAP@10: {}".format(f_map(predictions, expectations, bioASQ=True))
         print(bioasq_map)
         log.info(bioasq_map)
-        _map = "[BM25] Normal MAP@10: {}".format(f_map(predictions, expectations))
-        print(_map)
-        log.info(_map)
+        map = "[BM25] Normal MAP@10: {}".format(f_map(predictions, expectations))
+        print(map)
+        log.info(map)
         recall = "[BM25] Normal RECALL@{}: {}".format(self.top_k, f_recall(predictions, expectations, at=self.top_k))
         print(recall)
         log.info(recall)
+        log.info("Evaluation time {}".format(time.time()-start_eval_time))
+
+        return bioasq_map
 
     # DATA GENERATOR FOR THIS MODEL
     def training_generator(self, training_data, hyperparameters, input_network, **kwargs):
