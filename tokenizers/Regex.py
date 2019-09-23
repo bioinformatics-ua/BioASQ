@@ -16,14 +16,27 @@ else:
 class Regex(BaseTokenizer):
     def __init__(self, stem=False, sw_file=None, queries_sw=False, articles_sw=False, **kwargs):
         super().__init__(**kwargs)
-        self.stem = stem
+        if isinstance(stem, str):
+            self.stem = stem == "true"
+        else:
+            self.stem = stem
         self.st = PorterStemmer() if stem else None
         self.sw_file = sw_file
-        self.queries_sw = queries_sw
-        self.articles_sw = articles_sw
+
+        if isinstance(queries_sw, str):
+            self.queries_sw = queries_sw == "true"
+        else:
+            self.queries_sw = queries_sw
+
+        if isinstance(articles_sw, str):
+            self.articles_sw = articles_sw == "true"
+        else:
+            self.articles_sw = articles_sw
+
         self.pattern = re.compile('[^a-zA-Z0-9\s]+')
         self.filter_whitespace = lambda x: not x == ""
         self.name = self.prefix_name + "_" + ("stem_" if stem else "")+"Regex"
+        print("DEBUG created tokenizer", self.name)
         if self.sw_file is not None:
             with open(self.sw_file, "r") as f:
                 self.stop_words = json.load(f)

@@ -10,7 +10,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.optimizers import Adadelta
 from metrics.evaluators import f_map, f_recall
 from random import sample, choice
-from utils import LimitedDict
+from utils import LimitedDict, save_model_weights
 from heapq import nlargest
 import time
 import numpy as np
@@ -51,6 +51,8 @@ class DeepRank(ModelAPI):
         self.cached_articles_tokenized = LimitedDict(2000000)
         self.cached_queries_tokenized = LimitedDict(50000)
 
+        self.cached_preprocess_query_doc = LimitedDict(10000)
+
         # name
         self.name = "DeepRank_{}_{}_{}".format(self.tokenizer.name, self.embedding.name, config_to_string(self.config))
 
@@ -76,7 +78,7 @@ class DeepRank(ModelAPI):
         training_data = {}
         print("[DeepRank] Prepare the training data")
         # select irrelevant and particly irrelevant articles
-        DEBUG_JUMP = True
+        DEBUG_JUMP = False
         if not DEBUG_JUMP:
             for i, items in enumerate(queries.train_data_dict.items()):
 
@@ -90,21 +92,21 @@ class DeepRank(ModelAPI):
                     # skip
                     continue
                 # irrelevant ids
-                irrelevant_ids = (collection_ids-retrieved_positive_ids)-partially_positive_ids
-                num_irrelevant_ids = 10000  # 5*len(partially_positive_ids)
+                irrelevant_ids = (collection_ids-partially_positive_ids)
+                num_irrelevant_ids = 2500  # 5*len(partially_positive_ids)
                 num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
                 irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
                 training_data[query_id] = {"positive_ids": list(retrieved_positive_ids),
-                                           "partially_positive_ids": list(partially_positive_ids),
+                                           "partially_positive_ids": [partially_ids for partially_ids in retrieved["train"][query_id]["documents"] if partially_ids is not retrieved_positive_ids],
                                            "irrelevant_ids": list(irrelevant_ids),
                                            "query": self.tokenizer.tokenize_query(query_data["query"])}
 
         # manual load checkpoint
         # checkpoint
-        # print("LOAD")
-        # with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
-        #    training_data = pickle.load(f)
+        print("MAKE CHECK POINT")
+        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "wb") as f:
+            pickle.dump(training_data, f)
 
         # total ids
         used_articles_ids = set()
@@ -238,6 +240,12 @@ class DeepRank(ModelAPI):
                 with open(self.__training_data_file_name(**kwargs), "rb") as f:
                     train_data = pickle.load(f)
 
+        if not simulation:
+            # clean some data
+            print("keys", kwargs["retrieved"].keys())
+            del kwargs["retrieved"]["train"]
+            print("[DEBUG] GC CALL", gc.collect())
+
         # build the network
         if not self.is_trained():
             steps.append("[MISS] DeepRank build network")
@@ -249,11 +257,15 @@ class DeepRank(ModelAPI):
             steps.append("[READY] DeepRank trained network")
 
         if not simulation:
+
+            # DEGUB TEST
+            save_model_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), self.deeprank_model)
+
             # train the network
             self.train_network(training_data=train_data, validation_data=kwargs["retrieved"]["validation"], queries=queries, **self.config)
 
             # save current weights of the model
-            self.deeprank_model.save_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), overwrite=True)
+            save_model_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), self.deeprank_model)
 
         return model_output
 
@@ -286,10 +298,17 @@ class DeepRank(ModelAPI):
 
         if not simulation:
             inference_generator = self.inference_generator(inference_data=data_to_infer, **kwargs)
-            for i, gen_data in enumerate(inference_generator):
-                start_eval_time = time.time()
+
+            i = 0
+            start_eval_time = time.time()
+            gen_data = next(inference_generator)
+            log.info("[DeepRank] generate query data time: {}".format(time.time()-start_eval_time))
+
+            while gen_data is not None:
+            #for i, gen_data in enumerate(inference_generator):
+
                 X, docs_ids, query_id, query = gen_data
-                log.info("[DeepRank] generate query data time: {}".format(time.time()-start_eval_time))
+
                 log.info("[DeepRank] inference for  {}-{}".format(i, query_id))
                 start_eval_time = time.time()
                 scores = self.deeprank_model.predict(X)
@@ -299,25 +318,33 @@ class DeepRank(ModelAPI):
 
                 start_eval_time = time.time()
 
-                merge_scores_ids.sort(key=lambda x: -x[1])
-                merge_scores_ids = merge_scores_ids[:self.top_k]
+                #merge_scores_ids.sort(key=lambda x: -x[1])
+                #merge_scores_ids = merge_scores_ids[:self.top_k]
 
-                # merge_scores_ids = nlargest(self.top_k, merge_scores_ids, key=lambda x: x[1])
+                merge_scores_ids = nlargest(self.top_k, merge_scores_ids, key=lambda x: x[1])
 
                 log.info("[DeepRank] top k time: {}".format(time.time()-start_eval_time))
                 # log.info(merge_scores_ids)
                 model_output["retrieved"][query_id] = {"query": query,
                                                        "documents": list(map(lambda x: x[0], merge_scores_ids))}
 
+                i += 1
+                start_eval_time = time.time()
+                try:
+                    gen_data = next(inference_generator)
+                except Exception:
+                    gen_data = None
+                log.info("[DeepRank] generate query data time: {}".format(time.time()-start_eval_time))
+
         return model_output
 
-    def train_network(self, training_data, validation_data, queries, hyperparameters, **kwargs):
+    def train_network(self, training_data, validation_data, queries, hyperparameters, train=False, **kwargs):
         print("[DeepRank] Start training")
         epochs = hyperparameters["epoch"]
         batch_size = hyperparameters["batch_size"]
         steps = max(1, len(training_data["train"])//batch_size)
 
-        training_generator = self.training_generator(training_data, hyperparameters, **kwargs)
+        training_generator = self.training_generator(training_data, hyperparameters, train=train, **kwargs)
 
         # sub sample the validation set because to speed up training
         sub_set_validation_size = int(len(validation_data)*0.15)
@@ -331,6 +358,7 @@ class DeepRank(ModelAPI):
 
         for epoch in range(epochs):
             loss_per_epoch = []
+            start_epoch_time = time.time()
             for step in range(steps):
 
                 X = next(training_generator)
@@ -343,30 +371,35 @@ class DeepRank(ModelAPI):
                                                                                                                          np.min(loss_per_epoch),
                                                                                                                          time.time()-start)
                 print(_train_line_info, end="\r")
-                log.info(_train_line_info)
+
+                # log.info(_train_line_info)
                 loss.append(loss_per_epoch)
 
-            _train_line_info = "Epoch: {} | avg loss: {} | max loss: {} | min loss: {}".format(epoch,
-                                                                                               np.mean(loss[-1]),
-                                                                                               np.max(loss[-1]),
-                                                                                               np.min(loss[-1]))
+            _train_line_info = "Epoch: {} | avg loss: {} | max loss: {} | min loss: {} | time: {}".format(epoch,
+                                                                                                          np.mean(loss[-1]),
+                                                                                                          np.max(loss[-1]),
+                                                                                                          np.min(loss[-1]),
+                                                                                                          time.time()-start_epoch_time)
             log.info(_train_line_info)
             print()
             print("", end="\r")
             print(_train_line_info)
-            best_map = 14
+
+            # debug JUMP THE VALIDATION
+            continue
+            best_map = 0.11
 
             if epoch % 20 == 0:
                 print("Evaluation")
                 # compute validation score!
-                sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, **kwargs)["retrieved"]
+                sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
                 _map = self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
 
                 if _map > best_map:
                     best_map = _map
-                    validation_scores = self.inference(data_to_infer=validation_data, **kwargs)["retrieved"]
+                    validation_scores = self.inference(data_to_infer=validation_data, train=True, **kwargs)["retrieved"]
                     print("Metrics on the full validation set")
-                    self.show_evaluation(validation_scores, queries.validation_data_dict)
+                    self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data)))
 
     def show_evaluation(self, dict_results, gold_standard):
 
@@ -376,17 +409,18 @@ class DeepRank(ModelAPI):
 
         for _id in dict_results.keys():
             expectations.append(gold_standard[_id])
-            predictions.append(dict_results[_id]["id"])
+            predictions.append(list(map(lambda x: x["id"], dict_results[_id]["documents"])))
 
-        bioasq_map = "[BM25] BioASQ MAP@10: {}".format(f_map(predictions, expectations, bioASQ=True))
-        print(bioasq_map)
-        log.info(bioasq_map)
-        map = "[BM25] Normal MAP@10: {}".format(f_map(predictions, expectations))
-        print(map)
-        log.info(map)
-        recall = "[BM25] Normal RECALL@{}: {}".format(self.top_k, f_recall(predictions, expectations, at=self.top_k))
-        print(recall)
-        log.info(recall)
+        bioasq_map = f_map(predictions, expectations, bioASQ=True)
+        str_bioasq_map = "[BM25] BioASQ MAP@10: {}".format(bioasq_map)
+        print(str_bioasq_map)
+        log.info(str_bioasq_map)
+        str_map = "[BM25] Normal MAP@10: {}".format(f_map(predictions, expectations))
+        print(str_map)
+        log.info(str_map)
+        str_recall = "[BM25] Normal RECALL@{}: {}".format(self.top_k, f_recall(predictions, expectations, at=self.top_k))
+        print(str_recall)
+        log.info(str_recall)
         log.info("Evaluation time {}".format(time.time()-start_eval_time))
 
         return bioasq_map
@@ -466,7 +500,7 @@ class DeepRank(ModelAPI):
                     query_negative_doc.append(negative_snippets)
                     query_negative_doc_position.append(negative_snippets_position)
 
-    def inference_generator(self, inference_data, input_network, **kwargs):
+    def inference_generator(self, inference_data, input_network, train, **kwargs):
         """
         inference_data: [{query_id: <int>, query: <str>, documents: <list {}>}]
         """
@@ -475,6 +509,9 @@ class DeepRank(ModelAPI):
         S = input_network["S"]
 
         for query_id, query_data in inference_data.items():
+            if train and query_id in self.cached_preprocess_query_doc:
+                yield self.cached_preprocess_query_doc[query_id]
+                continue
 
             # clear
             query = []
@@ -486,7 +523,8 @@ class DeepRank(ModelAPI):
             else:
                 tokenized_query = self.tokenizer.tokenize_query(query_data["query"])
                 tokenized_query = pad_sequences([tokenized_query], maxlen=Q, padding="post")[0]
-                self.cached_queries_tokenized[query_id] = tokenized_query
+                if not train:  # dont cache tokenization in train
+                    self.cached_queries_tokenized[query_id] = tokenized_query
 
             for doc_data in query_data["documents"]:
 
@@ -494,7 +532,8 @@ class DeepRank(ModelAPI):
                     tokenized_doc = self.cached_articles_tokenized[doc_data["id"]]
                 else:
                     tokenized_doc = self.tokenizer.tokenize_article(doc_data["original"])
-                    self.cached_articles_tokenized[doc_data["id"]] = tokenized_doc
+                    if not train:  # dont cache tokenization in train
+                        self.cached_articles_tokenized[doc_data["id"]] = tokenized_doc
 
                 doc_snippets, doc_snippets_position = self.__snippet_interaction(tokenized_query, tokenized_doc, Q, P, S)
 
@@ -505,9 +544,12 @@ class DeepRank(ModelAPI):
             # info state of the cache
             log.info("size queries in cache {}".format(self.cached_queries_tokenized.current_elments))
             log.info("size articles in cache {}".format(self.cached_articles_tokenized.current_elments))
+            log.info("size preprocess query_snippet in cache {}".format(self.cached_preprocess_query_doc.current_elments))
 
             X = [np.array(query), np.array(query_doc), np.array(query_doc_position)]
-            yield X, map(lambda x: {"id": x["id"], "original": x["original"]}, query_data["documents"]), query_id, query_data["query"]
+            out = (X, list(map(lambda x: {"id": x["id"], "original": x["original"]}, query_data["documents"])), query_id, query_data["query"])
+            self.cached_preprocess_query_doc[query_id] = out
+            yield out
 
     def __snippet_interaction(self, tokenized_query, tokenized_article, Q, P, S):
 

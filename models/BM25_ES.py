@@ -6,6 +6,7 @@ from metrics.evaluators import f_map, f_recall
 import json
 from logger import log
 import pickle
+import gc
 
 
 class BM25_ES(ModelAPI):
@@ -164,10 +165,16 @@ class BM25_ES(ModelAPI):
 
                 # add to the output
                 model_output["retrieved"] = retrieved
+                print("keys", model_output["retrieved"].keys())
 
             # rerun the show_evaluation
             if not simulation and self.evaluation:
                 self.show_evaluation(model_output["retrieved"], queries)
+
+            if not simulation:
+                # clear get some space
+                del self.tokenizer
+                print("[DEBUG] Call gc del tokenizer", gc.collect())
 
         return model_output
 

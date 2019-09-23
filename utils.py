@@ -1,5 +1,6 @@
 import json
 import yaml
+import h5py
 from importlib import import_module
 from logger import log
 from collections import deque
@@ -76,3 +77,18 @@ class LimitedDict(dict):
     def __getitem__(self, key):
         self.__update_frequency(key)
         return super().__getitem__(key)
+
+
+def save_model_weights(file_name, model):
+    with h5py.File(file_name, 'w') as f:
+        weight = model.get_weights()
+        for i in range(len(weight)):
+            f.create_dataset('weight'+str(i), data=weight[i])
+
+
+def load_model_weights(file_name, model):
+    with h5py.File(file_name, 'r') as f:
+        weight = []
+        for i in range(len(f.keys())):
+            weight.append(f['weight'+str(i)][:])
+        model.set_weights(weight)
