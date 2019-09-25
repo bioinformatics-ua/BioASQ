@@ -45,7 +45,7 @@ class Bllip(BaseTokenizer):
 
     def get_config(self):
         t_config = super().get_config()
-        t_config["stem"] = json.dumps(self.stem)
+        t_config["stem"] = self.stem
         return t_config
 
     def save_to_json(self, **kwargs):

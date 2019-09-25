@@ -63,7 +63,7 @@ class Regex(BaseTokenizer):
     def tokenize_query(self, query):
         tokenized_query = self.texts_to_sequences([query])[0]
         if self.queries_sw:
-            if self.stop_words is None:  # lazzy initialization
+            if self.stop_words_tokenized is None:  # lazzy initialization
                 self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
             tokenized_query = [token for token in tokenized_query if token not in self.stop_words_tokenized]
 
@@ -72,7 +72,7 @@ class Regex(BaseTokenizer):
     def tokenize_article(self, article):
         tokenized_article = self.texts_to_sequences([article])[0]
         if self.articles_sw:
-            if self.stop_words is None:  # lazzy initialization
+            if self.stop_words_tokenized is None:  # lazzy initialization
                 self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
             tokenized_article = [token for token in tokenized_article if token not in self.stop_words_tokenized]
 
@@ -94,11 +94,11 @@ class Regex(BaseTokenizer):
 
     def get_config(self):
         t_config = super().get_config()
-        t_config["stem"] = json.dumps(self.stem)
+        t_config["stem"] = self.stem
         if self.sw_file is not None:
-            t_config["sw_file"] = json.dumps(self.sw_file)
-            t_config["queries_sw"] = json.dumps(self.queries_sw)
-            t_config["articles_sw"] = json.dumps(self.articles_sw)
+            t_config["sw_file"] = self.sw_file
+            t_config["queries_sw"] = self.queries_sw
+            t_config["articles_sw"] = self.articles_sw
         return t_config
 
     def save_to_json(self, **kwargs):
