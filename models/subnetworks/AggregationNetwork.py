@@ -7,11 +7,11 @@ from logger import log
 
 
 class AggregationNetwork(Model):
-    def __init__(self, embedding_layer, **kwargs):
+    def __init__(self, embedding_layer, regularizer, **kwargs):
         super().__init__()
         self.embedding_layer = embedding_layer
-        self.term_gating_layer = TermGating(self.embedding_layer.output_dim, **kwargs)
-        self.dense = Dense(1, **kwargs)
+        self.term_gating_layer = TermGating(self.embedding_layer.output_dim, regularizer=regularizer, **kwargs)
+        self.dense = Dense(1, kernel_regularizer=regularizer, **kwargs)
 
     def call(self, x):
         """

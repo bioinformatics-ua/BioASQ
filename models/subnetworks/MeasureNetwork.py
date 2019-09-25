@@ -6,7 +6,7 @@ from logger import log
 
 
 class MeasureNetwork(Model):
-    def __init__(self, Q, S, P, gru_bidirectional, gru_dim, filters, kernel, **kwargs):
+    def __init__(self, Q, S, P, gru_bidirectional, gru_dim, filters, kernel, regularizer, **kwargs):
         super().__init__()
         log.info("[MeasureNetwork] kwargs:"+str(kwargs))
         self.Q = Q
@@ -26,9 +26,9 @@ class MeasureNetwork(Model):
         self.distributed_by_query_term = Lambda(lambda x: unstack(x, axis=1), name="Distributed_by_query_term")
         self.concat_snippet_position = Concatenate(name="concat_snippet_position")
         if gru_bidirectional:
-            self.gru = Bidirectional(GRU(gru_dim, name="gru_passage_aggregation", **kwargs))
+            self.gru = Bidirectional(GRU(gru_dim, kernel_regularizer=regularizer, name="gru_passage_aggregation", **kwargs))
         else:
-            self.gru = GRU(gru_dim, name="gru_passage_aggregation", **kwargs)
+            self.gru = GRU(gru_dim, kernel_regularizer=regularizer, name="gru_passage_aggregation", **kwargs)
         self.add_passage_dimension = Lambda(lambda x: K.expand_dims(x, axis=1), name="add_passage_dimension")
         self.expand_dims_layer = Lambda(lambda x: K.expand_dims(x), name="expand_dims_layer")
         self.reciprocal_function = Lambda(lambda x: 1/(x+2), name="reciprocal_function")

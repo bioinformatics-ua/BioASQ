@@ -1,9 +1,8 @@
-from utils import yaml_loader, json_loader, dynamicly_class_load
+from utils import yaml_loader, json_loader, dynamicly_class_load, reset_graph
 from dataset.dataset import Corpora, Queries
 from os.path import exists
 from logger import log
 from models.model import ModelAPI
-
 
 class Pipeline(ModelAPI):
     def __init__(self, config_file, mode):
@@ -38,6 +37,7 @@ class Pipeline(ModelAPI):
             self.modules.append(m_instance)
 
     def train(self, simulation=False):
+        reset_graph()
         # first module input is always the corpora plus training queires
         next_module_input = {"corpora": self.corpora, "queries": self.queries, "steps": []}
         for module in self.modules:

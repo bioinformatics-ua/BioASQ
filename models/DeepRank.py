@@ -4,6 +4,7 @@ from os.path import exists, join
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
+from tensorflow.keras import regularizers
 from logger import log
 from models.subnetworks.input_network import DetectionNetwork
 from tensorflow.keras.preprocessing.sequence import pad_sequences
@@ -78,7 +79,7 @@ class DeepRank(ModelAPI):
         training_data = {}
         print("[DeepRank] Prepare the training data")
         # select irrelevant and particly irrelevant articles
-        DEBUG_JUMP = False
+        DEBUG_JUMP = True
         if not DEBUG_JUMP:
             for i, items in enumerate(queries.train_data_dict.items()):
 
@@ -98,15 +99,15 @@ class DeepRank(ModelAPI):
                 irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
                 training_data[query_id] = {"positive_ids": list(retrieved_positive_ids),
-                                           "partially_positive_ids": [partially_ids for partially_ids in retrieved["train"][query_id]["documents"] if partially_ids is not retrieved_positive_ids],
+                                           "partially_positive_ids": [partially_ids for partially_ids in partially_positive_ids if partially_ids is not retrieved_positive_ids],
                                            "irrelevant_ids": list(irrelevant_ids),
                                            "query": self.tokenizer.tokenize_query(query_data["query"])}
 
         # manual load checkpoint
-        # checkpoint
+        # LOAD
         print("MAKE CHECK POINT")
-        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "wb") as f:
-            pickle.dump(training_data, f)
+        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
+            training_data = pickle.load(f)
 
         # total ids
         used_articles_ids = set()
@@ -148,16 +149,19 @@ class DeepRank(ModelAPI):
 
     def build_network(self, input_network, measure_network, aggregation_network, hyperparameters, **kwargs):
 
+        # HARDCODED
+        l2_reg = regularizers.l2(0.0001)
+
         # build 3 sub models
         detection_network = DetectionNetwork(embedding=self.embedding, **input_network)
         # measure_network
         name, attributes = list(measure_network.items())[0]
         _class = dynamicly_class_load("models.subnetworks."+name, name)
-        measure_network = _class(**input_network, **attributes)
+        measure_network = _class(regularizer=l2_reg, **input_network, **attributes)
         # aggregation_network
         name, attributes = list(aggregation_network.items())[0]
         _class = dynamicly_class_load("models.subnetworks."+name, name)
-        aggregation_network = _class(embedding_layer=detection_network.embedding_layer, **attributes)
+        aggregation_network = _class(regularizer=l2_reg, embedding_layer=detection_network.embedding_layer, **attributes)
 
         # assemble the network
         query_input = Input(shape=(detection_network.Q,), name="query_input")
@@ -385,9 +389,7 @@ class DeepRank(ModelAPI):
             print("", end="\r")
             print(_train_line_info)
 
-            # debug JUMP THE VALIDATION
-            continue
-            best_map = 0.11
+            best_map = 0.14
 
             if epoch % 20 == 0:
                 print("Evaluation")

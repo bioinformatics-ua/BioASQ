@@ -35,7 +35,7 @@ class Regex(BaseTokenizer):
 
         self.pattern = re.compile('[^a-zA-Z0-9\s]+')
         self.filter_whitespace = lambda x: not x == ""
-        self.name = self.prefix_name + "_" + ("stem_" if stem else "")+"Regex"
+        self.name = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex"
         print("DEBUG created tokenizer", self.name)
         if self.sw_file is not None:
             with open(self.sw_file, "r") as f:
