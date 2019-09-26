@@ -393,7 +393,7 @@ class DeepRank(ModelAPI):
 
         loss = []  # dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
 
-        for epoch in range(epochs):
+        for epoch in range(1, epochs):
             loss_per_epoch = []
             start_epoch_time = time.time()
             for step in range(steps):
