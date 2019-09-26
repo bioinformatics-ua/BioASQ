@@ -1,5 +1,5 @@
 from models.model import ModelAPI
-from utils import dynamicly_class_load, config_to_string
+from utils import dynamicly_class_load, config_to_string, reset_graph
 from os.path import exists, join
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
@@ -10,7 +10,7 @@ from models.subnetworks.input_network import DetectionNetwork
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.optimizers import Adadelta
 from metrics.evaluators import f_map, f_recall
-from random import sample, choice
+from random import sample, choice, shuffle
 from utils import LimitedDict, save_model_weights
 from heapq import nlargest
 import time
@@ -244,32 +244,32 @@ class DeepRank(ModelAPI):
                 with open(self.__training_data_file_name(**kwargs), "rb") as f:
                     train_data = pickle.load(f)
 
-        if not simulation:
-            # clean some data
-            print("keys", kwargs["retrieved"].keys())
-            del kwargs["retrieved"]["train"]
-            print("[DEBUG] GC CALL", gc.collect())
+        if "k_fold" in self.config["hyperparameters"]:
+            k_fold = self.config["hyperparameters"]["k_fold"]
+            steps.append("[MISS] DeepRank {}-fold validation".format(k_fold))
 
-        # build the network
-        if not self.is_trained():
-            steps.append("[MISS] DeepRank build network")
-            if not simulation:
-                steps.append("[DEEPRANK] build network")
-                self.build_network(**self.config)
-                self.build_train_arch(**self.config)
+            self.cross_validation(training_data=train_data, queries=queries, k_fold=k_fold, **self.config)
         else:
-            steps.append("[READY] DeepRank trained network")
+            # build the network
+            if not self.is_trained():
+                steps.append("[MISS] DeepRank build network")
+                if not simulation:
+                    steps.append("[DEEPRANK] build network")
+                    self.build_network(**self.config)
+                    self.build_train_arch(**self.config)
+            else:
+                steps.append("[READY] DeepRank trained network")
 
-        if not simulation:
+            if not simulation:
 
-            # DEGUB TEST
-            save_model_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), self.deeprank_model)
+                # DEGUB TEST
+                save_model_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), self.deeprank_model)
 
-            # train the network
-            self.train_network(training_data=train_data, validation_data=kwargs["retrieved"]["validation"], queries=queries, **self.config)
+                # train the network
+                self.train_network(training_data=train_data, validation_data=kwargs["retrieved"]["validation"], queries=queries, **self.config)
 
-            # save current weights of the model
-            save_model_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), self.deeprank_model)
+                # save current weights of the model
+                save_model_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), self.deeprank_model)
 
         return model_output
 
@@ -342,6 +342,36 @@ class DeepRank(ModelAPI):
 
         return model_output
 
+    def cross_validation(self, training_data, k_fold, queries, train=False, **kwargs):
+        print("[DeepRank] Start cross validation")
+        traning_size = len(training_data["train"])
+        fold_size = len(training_data["train"])//k_fold + 1
+
+        unorder_keys = list(training_data["train"].keys())
+        shuffle(unorder_keys)
+
+        for i in range(0, traning_size, fold_size):
+            validation_keys = unorder_keys[i:i+fold_size]
+            train_keys = unorder_keys[0:i]+unorder_keys[i+fold_size:]
+
+            k_fold_train_data = {"train": {key: training_data["train"][key] for key in train_keys}, "articles": training_data["articles"]}
+            k_fold_validation_data = {key: {"documents": training_data["train"][key]["positive_ids"]+training_data["train"][key]["partially_positive_ids"],
+                                            "query": queries.train_data_dict[key]["query"]} for key in validation_keys}
+
+            print("[DEEPRANK] Delete network")
+            del self.trainable_deep_rank
+            del self.deeprank_model
+
+            print("[DEEPRANK] Reset graph")
+            reset_graph()
+            print("[DEEPRANK] build network")
+            self.build_network(**self.config)
+            self.build_train_arch(**self.config)
+
+            print("[DEEPRANK] gc", gc.collect())
+
+            self.train_network(k_fold_train_data, k_fold_validation_data, queries=queries, train=train, **kwargs)
+
     def train_network(self, training_data, validation_data, queries, hyperparameters, train=False, **kwargs):
         print("[DeepRank] Start training")
         epochs = hyperparameters["epoch"]
@@ -351,12 +381,15 @@ class DeepRank(ModelAPI):
         training_generator = self.training_generator(training_data, hyperparameters, train=train, **kwargs)
 
         # sub sample the validation set because to speed up training
-        sub_set_validation_size = int(len(validation_data)*0.15)
+        sub_set_validation_size = int(len(validation_data)*0.10)
         sub_set_validation = dict(sample(validation_data.items(), sub_set_validation_size))
         # build gold_standard # queries.validation_data_dict
         sub_set_validation_gold_standard = {}
         for key in sub_set_validation.keys():
-            sub_set_validation_gold_standard[key] = queries.validation_data_dict[key]["documents"]
+            if "k_fold" in hyperparameters:
+                sub_set_validation_gold_standard[key] = queries.train_data_dict[key]["documents"]
+            else:
+                sub_set_validation_gold_standard[key] = queries.validation_data_dict[key]["documents"]
 
         loss = []  # dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
 
@@ -389,19 +422,15 @@ class DeepRank(ModelAPI):
             print("", end="\r")
             print(_train_line_info)
 
-            best_map = 0.14
-
             if epoch % 20 == 0:
                 print("Evaluation")
                 # compute validation score!
                 sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
-                _map = self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
+                self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
 
-                if _map > best_map:
-                    best_map = _map
-                    validation_scores = self.inference(data_to_infer=validation_data, train=True, **kwargs)["retrieved"]
-                    print("Metrics on the full validation set")
-                    self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data)))
+        validation_scores = self.inference(data_to_infer=validation_data, train=True, **kwargs)["retrieved"]
+        print("Metrics on the full validation set")
+        self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data)))
 
     def show_evaluation(self, dict_results, gold_standard):
 
@@ -414,13 +443,13 @@ class DeepRank(ModelAPI):
             predictions.append(list(map(lambda x: x["id"], dict_results[_id]["documents"])))
 
         bioasq_map = f_map(predictions, expectations, bioASQ=True)
-        str_bioasq_map = "[BM25] BioASQ MAP@10: {}".format(bioasq_map)
+        str_bioasq_map = "[DEEPRANK] BioASQ MAP@10: {}".format(bioasq_map)
         print(str_bioasq_map)
         log.info(str_bioasq_map)
-        str_map = "[BM25] Normal MAP@10: {}".format(f_map(predictions, expectations))
+        str_map = "[DEEPRANK] Normal MAP@10: {}".format(f_map(predictions, expectations))
         print(str_map)
         log.info(str_map)
-        str_recall = "[BM25] Normal RECALL@{}: {}".format(self.top_k, f_recall(predictions, expectations, at=self.top_k))
+        str_recall = "[DEEPRANK] Normal RECALL@{}: {}".format(self.top_k, f_recall(predictions, expectations, at=self.top_k))
         print(str_recall)
         log.info(str_recall)
         log.info("Evaluation time {}".format(time.time()-start_eval_time))

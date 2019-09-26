@@ -5,7 +5,7 @@ corpora:
     folder: "/backup/pubmed_archive_json/pubmed_ready.tar.gz"
     files_are_compressed: true #(optinal) default is false
 queries:
-    train_file: "/backup/BioASQ-training7b/train.json"
+    train_file: "/backup/BioASQ-training7b/full_data.json"
     validation_file: "/backup/BioASQ-training7b/validation.json"
 pipeline:
     - BM25_ES:
@@ -39,7 +39,7 @@ pipeline:
                 activation: "selu"
                 filters: 100
                 gru_bidirectional: False
-                gru_dim: 56
+                gru_dim: 58
                 kernel:
                     - 3 #x
                     - 3 #y
@@ -47,11 +47,12 @@ pipeline:
             AggregationNetwork:
                 activation: "selu"
         hyperparameters:
+            k_fold: 5
             epoch: 120
-            batch_size: 128
+            batch_size: 256
             optimizer:
                 name: "adadelta" #(optinal) default is AdaDelta
                 learning_rate: 2
             l2_regularization: 0.0001 #(optinal) default is 0.0001
-            num_partially_positive_samples: 3
-            num_negative_samples: 4
+            num_partially_positive_samples: 2
+            num_negative_samples: 3
