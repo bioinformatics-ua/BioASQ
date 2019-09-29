@@ -105,7 +105,7 @@ class DeepRank(ModelAPI):
 
         # manual load checkpoint
         # LOAD
-        print("MAKE CHECK POINT")
+        print("LOAD CHECK POINT")
         with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
             training_data = pickle.load(f)
 
@@ -247,8 +247,8 @@ class DeepRank(ModelAPI):
         if "k_fold" in self.config["hyperparameters"]:
             k_fold = self.config["hyperparameters"]["k_fold"]
             steps.append("[MISS] DeepRank {}-fold validation".format(k_fold))
-
-            self.cross_validation(training_data=train_data, queries=queries, k_fold=k_fold, **self.config)
+            if not simulation:
+                self.cross_validation(training_data=train_data, queries=queries, k_fold=k_fold, **self.config)
         else:
             # build the network
             if not self.is_trained():
@@ -262,12 +262,8 @@ class DeepRank(ModelAPI):
 
             if not simulation:
 
-                # DEGUB TEST
-                save_model_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), self.deeprank_model)
-
                 # train the network
                 self.train_network(training_data=train_data, validation_data=kwargs["retrieved"]["validation"], queries=queries, **self.config)
-
                 # save current weights of the model
                 save_model_weights(join(self.cache_folder, "last_weights_{}.h5".format(self.name)), self.deeprank_model)
 
@@ -343,24 +339,40 @@ class DeepRank(ModelAPI):
         return model_output
 
     def cross_validation(self, training_data, k_fold, queries, train=False, **kwargs):
-        print("[DeepRank] Start cross validation")
+        print("[DEEPRANK] Start cross validation")
         traning_size = len(training_data["train"])
         fold_size = len(training_data["train"])//k_fold + 1
 
         unorder_keys = list(training_data["train"].keys())
         shuffle(unorder_keys)
 
-        for i in range(0, traning_size, fold_size):
+        print("[DEEPRANK] train size and fold_size", traning_size, fold_size)
+        validation_fold = []
+        train_fold = []
+        for _e, i in enumerate(range(0, traning_size, fold_size)):
+            print("[DEEPRANK] FOLD", _e)
+            validation_keys = unorder_keys[i:i+fold_size]
+            train_keys = unorder_keys[0:i]+unorder_keys[i+fold_size:]
+            validation_fold.append(validation_keys)
+            train_fold.append(train_fold)
+        print("start save")
+
+        with open("validation_fold.p", "wb") as f:
+            pickle.dump(validation_fold, f)
+
+        with open("train_fold.p", "wb") as f:
+            pickle.dump(train_fold, f)
+
+        print("saved")
+
+        for _e, i in enumerate(range(0, traning_size, fold_size)):
+            print("[DEEPRANK] FOLD", _e)
             validation_keys = unorder_keys[i:i+fold_size]
             train_keys = unorder_keys[0:i]+unorder_keys[i+fold_size:]
 
             k_fold_train_data = {"train": {key: training_data["train"][key] for key in train_keys}, "articles": training_data["articles"]}
             k_fold_validation_data = {key: {"documents": training_data["train"][key]["positive_ids"]+training_data["train"][key]["partially_positive_ids"],
                                             "query": queries.train_data_dict[key]["query"]} for key in validation_keys}
-
-            print("[DEEPRANK] Delete network")
-            del self.trainable_deep_rank
-            del self.deeprank_model
 
             print("[DEEPRANK] Reset graph")
             reset_graph()
@@ -370,7 +382,12 @@ class DeepRank(ModelAPI):
 
             print("[DEEPRANK] gc", gc.collect())
 
+            print(len(k_fold_train_data["train"]), len(train_keys))
+            print(len(k_fold_validation_data), len(validation_keys))
+
             self.train_network(k_fold_train_data, k_fold_validation_data, queries=queries, train=train, **kwargs)
+            save_model_path = join(self.cache_folder, "{}_last_weights_{}.h5".format(_e, self.name))
+            save_model_weights(save_model_path, self.deeprank_model)
 
     def train_network(self, training_data, validation_data, queries, hyperparameters, train=False, **kwargs):
         print("[DeepRank] Start training")
@@ -425,12 +442,21 @@ class DeepRank(ModelAPI):
             if epoch % 20 == 0:
                 print("Evaluation")
                 # compute validation score!
-                sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
+                if "k_fold" in hyperparameters:
+                    sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, articles=training_data["articles"], **kwargs)["retrieved"]
+                else:
+                    sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
+
                 self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
 
-        validation_scores = self.inference(data_to_infer=validation_data, train=True, **kwargs)["retrieved"]
-        print("Metrics on the full validation set")
-        self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data)))
+        if "k_fold" in hyperparameters:
+            validation_scores = self.inference(data_to_infer=validation_data, train=True, articles=training_data["articles"], **kwargs)["retrieved"]
+            print("Metrics on the full validation set")
+            self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.train_data)))
+        else:
+            validation_scores = self.inference(data_to_infer=validation_data, train=True, **kwargs)["retrieved"]
+            print("Metrics on the full validation set")
+            self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data)))
 
     def show_evaluation(self, dict_results, gold_standard):
 
@@ -558,13 +584,15 @@ class DeepRank(ModelAPI):
                     self.cached_queries_tokenized[query_id] = tokenized_query
 
             for doc_data in query_data["documents"]:
-
-                if doc_data["id"] in self.cached_articles_tokenized:
-                    tokenized_doc = self.cached_articles_tokenized[doc_data["id"]]
+                if "articles" in kwargs:
+                    tokenized_doc = kwargs["articles"][doc_data]
                 else:
-                    tokenized_doc = self.tokenizer.tokenize_article(doc_data["original"])
-                    if not train:  # dont cache tokenization in train
-                        self.cached_articles_tokenized[doc_data["id"]] = tokenized_doc
+                    if doc_data["id"] in self.cached_articles_tokenized:
+                        tokenized_doc = self.cached_articles_tokenized[doc_data["id"]]
+                    else:
+                        tokenized_doc = self.tokenizer.tokenize_article(doc_data["original"])
+                        if not train:  # dont cache tokenization in train
+                            self.cached_articles_tokenized[doc_data["id"]] = tokenized_doc
 
                 doc_snippets, doc_snippets_position = self.__snippet_interaction(tokenized_query, tokenized_doc, Q, P, S)
 
@@ -578,7 +606,10 @@ class DeepRank(ModelAPI):
             log.info("size preprocess query_snippet in cache {}".format(self.cached_preprocess_query_doc.current_elments))
 
             X = [np.array(query), np.array(query_doc), np.array(query_doc_position)]
-            out = (X, list(map(lambda x: {"id": x["id"], "original": x["original"]}, query_data["documents"])), query_id, query_data["query"])
+            if "articles" in kwargs:
+                out = (X, list(map(lambda x: {"id": x}, query_data["documents"])), query_id, query_data["query"])
+            else:
+                out = (X, list(map(lambda x: {"id": x["id"], "original": x["original"]}, query_data["documents"])), query_id, query_data["query"])
             self.cached_preprocess_query_doc[query_id] = out
             yield out
 

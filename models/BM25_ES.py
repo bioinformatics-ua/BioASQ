@@ -217,7 +217,7 @@ class BM25_ES(ModelAPI):
     def show_evaluation(self, dict_results, queries):
 
         pred_train, expect_train = self.__prepare_data(dict_results["train"], queries.train_data)
-        pred_validation, expect_validation = self.__prepare_data(dict_results["validation"], queries.validation_data)
+        #pred_validation, expect_validation = self.__prepare_data(dict_results["validation"], queries.validation_data)
 
         bioasq_map = "[BM25] BioASQ MAP@10: {}".format(f_map(pred_train, expect_train, bioASQ=True))
         print(bioasq_map)

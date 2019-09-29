@@ -7,6 +7,7 @@ from collections import deque
 from tensorflow import reset_default_graph, set_random_seed
 from tensorflow.keras import backend as K
 import numpy as np
+import random
 
 
 def yaml_loader(file_name):
@@ -102,3 +103,4 @@ def reset_graph(seed=42):
     reset_default_graph()
     set_random_seed(seed)
     np.random.seed(seed)
+    random.seed(seed)

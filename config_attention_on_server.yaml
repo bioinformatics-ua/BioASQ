@@ -1,0 +1,57 @@
+mode: "train"
+cache_folder: "/backup/IR/cache"
+corpora:
+    name: "bioasq"
+    folder: "/backup/pubmed_archive_json/pubmed_ready.tar.gz"
+    files_are_compressed: true #(optinal) default is false
+queries:
+    train_file: "/backup/BioASQ-training7b/full_data.json"
+    validation_file: "/backup/BioASQ-training7b/validation.json"
+pipeline:
+    - BM25_ES:
+        top_k: 2500
+        address: "http://193.136.175.98:8125"
+        tokenizer:
+            Bllip:
+                n_process: 20
+                stem: true
+        evaluation: true
+    - DeepRank:
+        top_k: 10
+        evaluation: true
+        tokenizer:
+            Regex:
+                n_process: 20
+                stem: false
+                sw_file: "tokenizers/stop_words.json"
+                queries_sw: true # stop words
+                articles_sw: false # stop words
+        embedding:
+            FastText:
+                trainable: false
+                path: "/backup/pre-trained_embeddings/fasttext/BioWordVec_PubMed_MIMICIII_d200.bin"
+        input_network:
+            Q: 13 #number max of query tokens
+            P: 5 #number max of snippets per query token
+            S: 15 #number max of snippet tokens
+        measure_network:
+            MeasureAttentionNetwork:
+                activation: "selu"
+                filters: 100
+                attention_dim: 58
+                kernel:
+                    - 3 #x
+                    - 3 #y
+        aggregation_network:
+            AggregationNetwork:
+                activation: "selu"
+        hyperparameters:
+            k_fold: 5
+            epoch: 120
+            batch_size: 256
+            optimizer:
+                name: "adadelta" #(optinal) default is AdaDelta
+                learning_rate: 2
+            l2_regularization: 0.0001 #(optinal) default is 0.0001
+            num_partially_positive_samples: 2
+            num_negative_samples: 3
