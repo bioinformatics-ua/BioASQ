@@ -1,5 +1,5 @@
 from utils import yaml_loader, json_loader, dynamicly_class_load, reset_graph
-from dataset.dataset import Corpora, Queries
+from dataset.dataset import Corpora, Queries, TestQueries
 from os.path import exists
 from logger import log
 from models.model import ModelAPI
@@ -45,15 +45,17 @@ class Pipeline(ModelAPI):
 
         return next_module_input
 
-    def inference(self, simulation=False, query=None):
+    def inference(self, simulation=False, query=None, queries_file=None):
         if query is not None:
             query = [{"query_id": "manual_submited", "query": query}]
-            next_module_input = {"corpora": self.corpora, "query": query, "steps": []}
+            next_module_input = {"data_to_infer": query, "steps": []}
+        if queries_file is not None:
+            next_module_input = {"data_to_infer": TestQueries(queries_file), "steps": []}
         else:
-            next_module_input = {"corpora": self.corpora, "queries": self.queries, "steps": []}
+            next_module_input = {"data_to_infer": self.queries, "steps": []}
 
         for module in self.modules:
-            next_module_input = module.inference(simulation=simulation, **next_module_input)
+            next_module_input = module.inference(simulation=simulation, train=False, **next_module_input)
 
         return next_module_input
 

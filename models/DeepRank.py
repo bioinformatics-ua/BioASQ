@@ -79,7 +79,7 @@ class DeepRank(ModelAPI):
         training_data = {}
         print("[DeepRank] Prepare the training data")
         # select irrelevant and particly irrelevant articles
-        DEBUG_JUMP = True
+        DEBUG_JUMP = False
         if not DEBUG_JUMP:
             for i, items in enumerate(queries.train_data_dict.items()):
 
@@ -104,10 +104,10 @@ class DeepRank(ModelAPI):
                                            "query": self.tokenizer.tokenize_query(query_data["query"])}
 
         # manual load checkpoint
-        # LOAD
-        print("LOAD CHECK POINT")
-        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
-            training_data = pickle.load(f)
+        # SAVE
+        print("SAVE CHECK POINT")
+        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "wb") as f:
+            pickle.dump(training_data, f)
 
         # total ids
         used_articles_ids = set()
@@ -311,22 +311,26 @@ class DeepRank(ModelAPI):
 
                 log.info("[DeepRank] inference for  {}-{}".format(i, query_id))
                 start_eval_time = time.time()
-                scores = self.deeprank_model.predict(X)
+                scores = self.deeprank_model.predict(X).tolist()
                 log.info("[DeepRank] prediction time: {}".format(time.time()-start_eval_time))
-                scores = map(lambda x: x[0], scores.tolist())
-                merge_scores_ids = list(zip(docs_ids, scores))
+
+                merge_scores_ids = []
+                for i in range(len(scores)):
+                    merge_scores_ids.append({"score": scores[i][0], **docs_ids[i]})
+                # scores = map(lambda x: x[0], scores.tolist())
+                # merge_scores_ids = list(zip(docs_ids, scores))
 
                 start_eval_time = time.time()
 
                 #merge_scores_ids.sort(key=lambda x: -x[1])
                 #merge_scores_ids = merge_scores_ids[:self.top_k]
 
-                merge_scores_ids = nlargest(self.top_k, merge_scores_ids, key=lambda x: x[1])
+                merge_scores_ids = nlargest(self.top_k, merge_scores_ids, key=lambda x: x["score"])
 
                 log.info("[DeepRank] top k time: {}".format(time.time()-start_eval_time))
                 # log.info(merge_scores_ids)
                 model_output["retrieved"][query_id] = {"query": query,
-                                                       "documents": list(map(lambda x: x[0], merge_scores_ids))}
+                                                       "documents": merge_scores_ids}
 
                 i += 1
                 start_eval_time = time.time()
@@ -340,35 +344,15 @@ class DeepRank(ModelAPI):
 
     def cross_validation(self, training_data, k_fold, queries, train=False, **kwargs):
         print("[DEEPRANK] Start cross validation")
-        traning_size = len(training_data["train"])
-        fold_size = len(training_data["train"])//k_fold + 1
 
-        unorder_keys = list(training_data["train"].keys())
-        shuffle(unorder_keys)
+        for _e, i in enumerate(range(k_fold)):
+            print("[DEEPRANK] LOAD FOLD", _e)
 
-        print("[DEEPRANK] train size and fold_size", traning_size, fold_size)
-        validation_fold = []
-        train_fold = []
-        for _e, i in enumerate(range(0, traning_size, fold_size)):
-            print("[DEEPRANK] FOLD", _e)
-            validation_keys = unorder_keys[i:i+fold_size]
-            train_keys = unorder_keys[0:i]+unorder_keys[i+fold_size:]
-            validation_fold.append(validation_keys)
-            train_fold.append(train_fold)
-        print("start save")
+            with open(str(_e)+"_validation_fold.p", "rb") as f:
+                validation_keys = pickle.load(f)
 
-        with open("validation_fold.p", "wb") as f:
-            pickle.dump(validation_fold, f)
-
-        with open("train_fold.p", "wb") as f:
-            pickle.dump(train_fold, f)
-
-        print("saved")
-
-        for _e, i in enumerate(range(0, traning_size, fold_size)):
-            print("[DEEPRANK] FOLD", _e)
-            validation_keys = unorder_keys[i:i+fold_size]
-            train_keys = unorder_keys[0:i]+unorder_keys[i+fold_size:]
+            with open(str(_e)+"_train_fold.p", "rb") as f:
+                train_keys = pickle.load(f)
 
             k_fold_train_data = {"train": {key: training_data["train"][key] for key in train_keys}, "articles": training_data["articles"]}
             k_fold_validation_data = {key: {"documents": training_data["train"][key]["positive_ids"]+training_data["train"][key]["partially_positive_ids"],
@@ -442,21 +426,23 @@ class DeepRank(ModelAPI):
             if epoch % 20 == 0:
                 print("Evaluation")
                 # compute validation score!
-                if "k_fold" in hyperparameters:
-                    sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, articles=training_data["articles"], **kwargs)["retrieved"]
-                else:
-                    sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
+                if len(sub_set_validation) > 0:
+                    if "k_fold" in hyperparameters:
+                        sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, articles=training_data["articles"], **kwargs)["retrieved"]
+                    else:
+                        sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
 
                 self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
 
-        if "k_fold" in hyperparameters:
-            validation_scores = self.inference(data_to_infer=validation_data, train=True, articles=training_data["articles"], **kwargs)["retrieved"]
-            print("Metrics on the full validation set")
-            self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.train_data)))
-        else:
-            validation_scores = self.inference(data_to_infer=validation_data, train=True, **kwargs)["retrieved"]
-            print("Metrics on the full validation set")
-            self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data)))
+        if len(validation_data) > 0:
+            if "k_fold" in hyperparameters:
+                validation_scores = self.inference(data_to_infer=validation_data, train=True, articles=training_data["articles"], **kwargs)["retrieved"]
+                print("Metrics on the full validation set")
+                self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.train_data)))
+            else:
+                validation_scores = self.inference(data_to_infer=validation_data, train=True, **kwargs)["retrieved"]
+                print("Metrics on the full validation set")
+                self.show_evaluation(validation_scores, dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data)))
 
     def show_evaluation(self, dict_results, gold_standard):
 
@@ -609,7 +595,7 @@ class DeepRank(ModelAPI):
             if "articles" in kwargs:
                 out = (X, list(map(lambda x: {"id": x}, query_data["documents"])), query_id, query_data["query"])
             else:
-                out = (X, list(map(lambda x: {"id": x["id"], "original": x["original"]}, query_data["documents"])), query_id, query_data["query"])
+                out = (X, list(map(lambda x: {"id": x["id"], "original": x["original"], "title": x["title"]}, query_data["documents"])), query_id, query_data["query"])
             self.cached_preprocess_query_doc[query_id] = out
             yield out
 

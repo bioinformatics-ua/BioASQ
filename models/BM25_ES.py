@@ -62,8 +62,9 @@ class BM25_ES(ModelAPI):
             for articles in corpora.read_documents_iterator():
 
                 # batch tokenize following Keras CODE
-                tokenized_articles = self.tokenizer.texts_to_sequences(map(lambda x: x["title"]+" "+x["abstract"], articles))
-
+                self.tokenizer.n_process = 10
+                tokenized_articles = self.tokenizer.tokenizer_multiprocess(list(map(lambda x: x["title"]+" "+x["abstract"], articles)))
+                print("INDEXING")
                 for i in range(len(articles)):
                     yield {
                       "_index": self.prefix_name,
@@ -75,6 +76,10 @@ class BM25_ES(ModelAPI):
                     index += 1
                     if not index % 100000:
                         log.info("{} documents indexed".format(index))
+
+                del tokenized_articles
+                del articles
+                print("gc", gc.collect())
 
         helpers.bulk(self.es, data_to_index_generator(), chunk_size=1000, request_timeout=200)
 
@@ -93,7 +98,7 @@ class BM25_ES(ModelAPI):
             query = ' '.join(map(lambda x: str(x), self.tokenizer.texts_to_sequences([query_data["query"]])[0]))
             query_es = {'query': {'bool': {'must': [{'query_string': {'query': query, 'analyze_wildcard': True}}], 'filter': [], 'should': [], 'must_not': []}}}
 
-            retrieved = self.es.search(index=self.prefix_name, body=query_es, size=self.top_k)
+            retrieved = self.es.search(index=self.prefix_name, body=query_es, size=self.top_k, request_timeout=200)
             documents = list(map(lambda x: {"id": x['_source']['id'],
                                             "score": x['_score'],
                                             "original": x['_source']['original'],

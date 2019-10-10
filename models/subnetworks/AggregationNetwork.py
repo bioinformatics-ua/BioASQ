@@ -32,6 +32,7 @@ class TermGating(Layer):
         self.activation = activations.get(activation)
         self.initializer = initializers.get(initializer)
         self.regularizer = regularizer
+        self.attention_weights = None
 
     def build(self, input_shape):
         print(input_shape)
@@ -47,5 +48,6 @@ class TermGating(Layer):
         """
         gated_logits = K.squeeze(K.dot(x[0], self.W_query), axis=-1)
         gated_distribution = K.expand_dims(K.softmax(gated_logits))
+        self.attention_weights = gated_distribution
         # weighted score
         return K.sum(x[1] * gated_distribution, axis=1)

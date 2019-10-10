@@ -73,3 +73,18 @@ class Queries:
 
         self.train_data_dict = dict(map(lambda x: (x["query_id"], {"documents": x["documents"], "query": x["query"]}), self.train_data))
         self.validation_data_dict = dict(map(lambda x: (x["query_id"], {"documents": x["documents"], "query": x["query"]}), self.validation_data))
+
+
+class TestQueries:
+    def __init__(self, test_file):
+        self.test_data = []
+        self.test_data_dict = {}
+        self.test_file = test_file
+
+        self.__load()
+
+    def __load(self):
+        with open(self.test_file, "r") as f:
+            self.test_data.extend(json.load(f))
+
+        self.test_data_dict = dict(map(lambda x: (x["query_id"], {"documents": x["documents"], "query": x["query"]}), self.test_data))

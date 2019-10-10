@@ -424,7 +424,7 @@ class BaseTokenizer:
                 return Process(target=tokenizeJob, args=(proc_id, texts, self.__class__, merge_tokenizer_path, self.get_properties(), kwargs))
 
             # multiprocess loop
-            itter = 400000
+            itter = 1000000
             for i, l in enumerate(range(0, len(texts), itter)):
                 process = []
 
