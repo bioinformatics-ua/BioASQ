@@ -56,6 +56,7 @@ class Pipeline(ModelAPI):
             next_module_input = {"data_to_infer": self.queries, "steps": []}
 
         for module in self.modules:
+            print(next_module_input.keys())
             next_module_input = module.inference(simulation=simulation, train=False, **next_module_input)
 
         return next_module_input

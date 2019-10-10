@@ -16,7 +16,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", help="Runing mode of the pipeline",
                         choices=['train', 'inference'])
     parser.add_argument("--query", help="Runing mode of the pipeline")
-    parser.add_argument("--validation_file", help="Validation file with queries")
+    parser.add_argument("--queries", help="Validation file with queries")
     parser.add_argument("config", help="configuration file with the instructions, must be in json or yaml format")
 
     args = parser.parse_args()
@@ -24,8 +24,8 @@ if __name__ == "__main__":
     if args.query is not None:
         print("[MODE]: Inference for query", args.query)
         mode = "inference"
-    if args.validation_file is not None:
-        print("[MODE]: Test for file", args.validation_file)
+    if args.queries is not None:
+        print("[MODE]: Test for file", args.queries)
         mode = "test"
     else:
         print("[MODE]: Train")
@@ -49,15 +49,18 @@ if __name__ == "__main__":
             print("\t", step)
         print("---------------------")
         pipeline.inference(query=args.query)
-    elif mode == "Test":
+    elif mode == "test":
         print("---------------------\n[ROUTINE] Steps that the pipeline for INFERENCE will execute")
-        steps = pipeline.inference(simulation=True, queries_file=args.query)["steps"]
+        steps = pipeline.inference(simulation=True, queries_file=args.queries)["steps"]
         for step in steps:
             print("\t", step)
         print("---------------------")
-        retrieved = pipeline.inference(queries_file=args.query)["retrieved"]
-        print("Save results")
-        name = "results_"+os.path.basename(args.query)+".p"
-        abspath = os.path.abspath(os.path.basename(args.query))
-        with open(os.path.join(abspath, name), "wb") as f:
-            pickle.dump(retrieved, f)
+        name = "results_"+os.path.basename(args.queries)+".p"
+        abspath = os.path.abspath(os.path.basename(args.queries))
+        print(os.path.join(abspath, name))
+
+        #retrieved = pipeline.inference(queries_file=args.queries)["retrieved"]
+        #print("Save results")
+
+        #with open(os.path.join(abspath, name), "wb") as f:
+        #    pickle.dump(retrieved, f)
