@@ -291,7 +291,9 @@ class DeepRank(ModelAPI):
             name = join(self.cache_folder, "last_weights_{}.h5".format(self.name))
             if exists(name):
                 print("LOAD FROM CACHE DeepRank weights")
-                self.deeprank_model.load_weights(name)
+                steps.append("[READY] DeepRank weights")
+                if not simulation:
+                    self.deeprank_model.load_weights(name)
             else:
                 steps.append("[MISS] DeepRank weights")
                 log.warning("[DeepRank] Missing weights for deeprank, it will use the random initialized weights")
@@ -432,7 +434,7 @@ class DeepRank(ModelAPI):
                     else:
                         sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
 
-                self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
+                        self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
 
         if len(validation_data) > 0:
             if "k_fold" in hyperparameters:

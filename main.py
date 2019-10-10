@@ -5,6 +5,8 @@ Application entry point
 import argparse
 from pipeline import Pipeline
 from logger import log
+import os
+import pickle
 
 
 if __name__ == "__main__":
@@ -49,8 +51,13 @@ if __name__ == "__main__":
         pipeline.inference(query=args.query)
     elif mode == "Test":
         print("---------------------\n[ROUTINE] Steps that the pipeline for INFERENCE will execute")
-        steps = pipeline.inference(simulation=True, query=args.query)["steps"]
+        steps = pipeline.inference(simulation=True, queries_file=args.query)["steps"]
         for step in steps:
             print("\t", step)
         print("---------------------")
-        pipeline.inference(query=args.query)
+        retrieved = pipeline.inference(queries_file=args.query)["retrieved"]
+        print("Save results")
+        name = "results_"+os.path.basename(args.query)+".p"
+        abspath = os.path.abspath(os.path.basename(args.query))
+        with open(os.path.join(abspath, name), "wb") as f:
+            pickle.dump(retrieved, f)

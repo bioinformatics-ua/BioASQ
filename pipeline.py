@@ -4,6 +4,7 @@ from os.path import exists
 from logger import log
 from models.model import ModelAPI
 
+
 class Pipeline(ModelAPI):
     def __init__(self, config_file, mode):
         # attributes

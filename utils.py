@@ -6,8 +6,10 @@ from logger import log
 from collections import deque
 from tensorflow import reset_default_graph, set_random_seed
 from tensorflow.keras import backend as K
+from metrics.evaluators import f_map, f_recall
 import numpy as np
 import random
+import time
 
 
 def yaml_loader(file_name):
@@ -104,3 +106,28 @@ def reset_graph(seed=42):
     set_random_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+
+
+def evaluation(dict_results, gold_standard, top_k):
+
+    start_eval_time = time.time()
+    predictions = []
+    expectations = []
+
+    for _id in gold_standard.keys():
+        expectations.append(gold_standard[_id])
+        predictions.append(list(map(lambda x: x["id"], dict_results[_id]["documents"])))
+
+    bioasq_map = f_map(predictions, expectations, bioASQ=True)
+    str_bioasq_map = "[DEEPRANK] BioASQ MAP@10: {}".format(bioasq_map)
+    print(str_bioasq_map)
+    log.info(str_bioasq_map)
+    str_map = "[DEEPRANK] Normal MAP@10: {}".format(f_map(predictions, expectations))
+    print(str_map)
+    log.info(str_map)
+    str_recall = "[DEEPRANK] Normal RECALL@{}: {}".format(top_k, f_recall(predictions, expectations, at=top_k))
+    print(str_recall)
+    log.info(str_recall)
+    log.info("Evaluation time {}".format(time.time()-start_eval_time))
+
+    return bioasq_map
