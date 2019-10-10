@@ -36,9 +36,10 @@ def dynamicly_class_load(module_path, class_name):
 
 
 def config_to_string(pars):
+
     str = ""
     if isinstance(pars, dict):
-        for k, v in pars.items():
+        for k, v in sorted(pars.items()):
             str += config_to_string(v)
     elif isinstance(pars, list):
         for e in pars:

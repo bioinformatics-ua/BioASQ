@@ -186,7 +186,8 @@ class BM25_ES(ModelAPI):
     def inference(self, data_to_infer, **kwargs):
         steps = kwargs["steps"]
         model_output = {"origin": self.name,
-                        "steps": steps}
+                        "steps": steps,
+                        "retrieved": {}}
 
         if "simulation" in kwargs:
             simulation = kwargs["simulation"]

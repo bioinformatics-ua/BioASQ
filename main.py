@@ -57,10 +57,9 @@ if __name__ == "__main__":
         print("---------------------")
         name = "results_"+os.path.basename(args.queries)+".p"
         abspath = os.path.abspath(os.path.basename(args.queries))
-        print(os.path.join(abspath, name))
 
-        #retrieved = pipeline.inference(queries_file=args.queries)["retrieved"]
-        #print("Save results")
+        retrieved = pipeline.inference(queries_file=args.queries)["retrieved"]
+        print("Save results")
 
-        #with open(os.path.join(abspath, name), "wb") as f:
-        #    pickle.dump(retrieved, f)
+        with open(os.path.join(abspath, name), "wb") as f:
+            pickle.dump(retrieved, f)

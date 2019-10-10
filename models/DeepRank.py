@@ -289,6 +289,7 @@ class DeepRank(ModelAPI):
                 self.build_network(**self.config)  # assignment occurs here
 
             name = join(self.cache_folder, "last_weights_{}.h5".format(self.name))
+
             if exists(name):
                 print("LOAD FROM CACHE DeepRank weights")
                 steps.append("[READY] DeepRank weights")
