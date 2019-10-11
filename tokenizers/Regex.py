@@ -35,12 +35,14 @@ class Regex(BaseTokenizer):
 
         self.pattern = re.compile('[^a-zA-Z0-9\s]+')
         self.filter_whitespace = lambda x: not x == ""
-        self.name = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex"
+        self.name = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex_"+self.queries_sw+"_"+self.articles_sw
         print("DEBUG created tokenizer", self.name)
         if self.sw_file is not None:
             with open(self.sw_file, "r") as f:
                 self.stop_words = json.load(f)
         self.stop_words_tokenized = None
+
+        print(self.queries_sw, self.articles_sw)
 
     def get_properties(self):
         return {"cache_folder": self.cache_folder, "prefix_name": self.prefix_name, "stem": self.stem}

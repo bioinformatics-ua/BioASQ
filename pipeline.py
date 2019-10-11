@@ -51,7 +51,7 @@ class Pipeline(ModelAPI):
             query = [{"query_id": "manual_submited", "query": query}]
             next_module_input = {"data_to_infer": query, "steps": []}
         if queries_file is not None:
-            next_module_input = {"data_to_infer": TestQueries(queries_file), "steps": []}
+            next_module_input = {"data_to_infer": TestQueries(queries_file).test_data, "steps": []}
         else:
             next_module_input = {"data_to_infer": self.queries, "steps": []}
 

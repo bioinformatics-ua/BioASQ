@@ -55,9 +55,9 @@ if __name__ == "__main__":
         for step in steps:
             print("\t", step)
         print("---------------------")
-        name = "results_"+os.path.basename(args.queries)+".p"
-        abspath = os.path.abspath(os.path.basename(args.queries))
-
+        name = "results_"+os.path.basename(args.queries).split(".")[0]+".p"
+        abspath = os.path.abspath(os.path.dirname(args.queries))
+        log.info(os.path.join(abspath, name))
         retrieved = pipeline.inference(queries_file=args.queries)["retrieved"]
         print("Save results")
 

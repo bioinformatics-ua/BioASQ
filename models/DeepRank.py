@@ -1,5 +1,5 @@
 from models.model import ModelAPI
-from utils import dynamicly_class_load, config_to_string, reset_graph
+from utils import dynamicly_class_load, config_to_string, reset_graph, load_model_weights
 from os.path import exists, join
 from tensorflow.keras.layers import Input
 from tensorflow.keras.models import Model
@@ -294,7 +294,7 @@ class DeepRank(ModelAPI):
                 print("LOAD FROM CACHE DeepRank weights")
                 steps.append("[READY] DeepRank weights")
                 if not simulation:
-                    self.deeprank_model.load_weights(name)
+                    load_model_weights(name, self.deeprank_model)
             else:
                 steps.append("[MISS] DeepRank weights")
                 log.warning("[DeepRank] Missing weights for deeprank, it will use the random initialized weights")
@@ -546,13 +546,13 @@ class DeepRank(ModelAPI):
                     query_negative_doc.append(negative_snippets)
                     query_negative_doc_position.append(negative_snippets_position)
 
-    def inference_generator(self, inference_data, input_network, train, **kwargs):
+    def inference_generator(self, inference_data, train, **kwargs):
         """
         inference_data: [{query_id: <int>, query: <str>, documents: <list {}>}]
         """
-        Q = input_network["Q"]
-        P = input_network["P"]
-        S = input_network["S"]
+        Q = self.config["input_network"]["Q"]
+        P = self.config["input_network"]["P"]
+        S = self.config["input_network"]["S"]
 
         for query_id, query_data in inference_data.items():
             if train and query_id in self.cached_preprocess_query_doc:
