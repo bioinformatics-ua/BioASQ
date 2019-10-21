@@ -1,6 +1,6 @@
 # Generic pipeline for Information Retrieval and BioDeepRank
 NOTE: The information realted to BioDeepRank will be added during the next days...
-The notebook Interaction
+The notebook Interaction Models shows how to initializate the BioDeepRank instance and the code is in the models folder
 
 
 ## Description
