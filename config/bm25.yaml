@@ -1,0 +1,18 @@
+mode: "train"
+cache_folder: "/backup/IR/cache"
+corpora:
+    name: "bioasq"
+    folder: "/backup/pubmed_archive_json/pubmed_ready.tar.gz"
+    files_are_compressed: true #(optinal) default is false
+queries:
+    train_file: "/backup/BioASQ-training7b/full_data.json"
+    validation_file: "/backup/BioASQ-training7b/validation.json"
+pipeline:
+    - BM25_ES:
+        top_k: 2500
+        address: "http://193.136.175.98:8125"
+        tokenizer:
+            Bllip:
+                n_process: 20
+                stem: true
+        evaluation: true
