@@ -13,7 +13,7 @@ else:
     maketrans = str.maketrans
 
 
-class Regex(BaseTokenizer):
+class Regex3(BaseTokenizer):
     def __init__(self, stem=False, sw_file=None, queries_sw=False, articles_sw=False, **kwargs):
         super().__init__(**kwargs)
         if isinstance(stem, str):
@@ -33,15 +33,16 @@ class Regex(BaseTokenizer):
         else:
             self.articles_sw = articles_sw
 
-        self.pattern = re.compile('[^a-zA-Z0-9\s]+')
         self.filter_whitespace = lambda x: not x == ""
-        self.name = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex"
-        self.name_properties = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex_"+str(self.queries_sw)+"_"+str(self.articles_sw)
+        self.name = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex3"
+        self.name_properties = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex3_"+str(self.queries_sw)+"_"+str(self.articles_sw)
         print("DEBUG created tokenizer", self.name)
         if self.sw_file is not None:
             with open(self.sw_file, "r") as f:
                 self.stop_words = json.load(f)
-        self.stop_words_tokenized = None
+
+            self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
+            self.stop_words_queries_tokenized = set(self.texts_to_sequences([self.stop_words])[0]+self.texts_to_sequences(["."])[0])
 
         print(self.queries_sw, self.articles_sw)
 
@@ -54,36 +55,34 @@ class Regex(BaseTokenizer):
                 "sw_file": self.sw_file}
 
     def tokenize_texts(self, texts, **kwargs):
-
+        # batch mode
+        sw = set()
         if kwargs["mode"] == "queries":
             flag = self.queries_sw
+            sw = self.stop_words_queries_tokenized
         elif kwargs["mode"] == "articles":
             flag = self.articles_sw
+            sw = self.stop_words_tokenized
 
         tokenized_texts = self.texts_to_sequences(texts)
         if flag:
-            if self.stop_words_tokenized is None:  # lazzy initialization
-                self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
-
             for tokenized_text in tokenized_texts:
-                tokenized_text = [token for token in tokenized_text if token not in self.stop_words_tokenized]
+                print(len(tokenized_text))
+                print(len(sw))
+                tokenized_text = [token for token in tokenized_text if token not in sw]
 
         return tokenized_texts
 
     def tokenize_query(self, query):
         tokenized_query = self.texts_to_sequences([query])[0]
         if self.queries_sw:
-            if self.stop_words_tokenized is None:  # lazzy initialization
-                self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
-            tokenized_query = [token for token in tokenized_query if token not in self.stop_words_tokenized]
+            tokenized_query = [token for token in tokenized_query if token not in self.stop_words_queries_tokenized]
 
         return tokenized_query
 
     def tokenize_article(self, article):
         tokenized_article = self.texts_to_sequences([article])[0]
         if self.articles_sw:
-            if self.stop_words_tokenized is None:  # lazzy initialization
-                self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
             tokenized_article = [token for token in tokenized_article if token not in self.stop_words_tokenized]
 
         return tokenized_article
@@ -91,10 +90,10 @@ class Regex(BaseTokenizer):
     def tokenizer(self, text, *args, **kwargs):
         text = text.lower()
         text = (text.encode("ascii", "replace").decode("utf-8"))
-        filters = '!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n'
+        filters = '!"#$%&()*+,-/:;<=>?@[\\]^_`{|}~\t\n'
         tab = maketrans(filters, " "*(len(filters)))
         text = text.translate(tab)
-        tokens = self.pattern.sub('', text).split(" ")
+        tokens = text.replace("."," .").split(" ")
         tokens = list(filter(self.filter_whitespace, tokens))
 
         if self.st is not None:
@@ -137,16 +136,16 @@ class Regex(BaseTokenizer):
             t_config["queries_sw"] = kwargs["queries_sw"]
             t_config["articles_sw"] = kwargs["articles_sw"]
             t_config["sw_file"] = kwargs["sw_file"]
-            return Regex(**t_config)
+            return Regex3(**t_config)
 
     @staticmethod
     def maybe_load(cache_folder, prefix_name, stem, **kwargs):
 
         # prefix_name and stem should be in the kwargs
-        name = prefix_name + "_" + ("stem_" if stem else "")+"Regex.json"
+        name = prefix_name + "_" + ("stem_" if stem else "")+"Regex3.json"
         path = join(cache_folder, name)
         if exists(path):
             print("[LOAD FROM CACHE] Load tokenizer from", path)
-            return Regex.load_from_json(path, **kwargs)
+            return Regex3.load_from_json(path, **kwargs)
 
-        return Regex(stem, cache_folder=cache_folder, prefix_name=prefix_name, **kwargs)
+        return Regex3(stem, cache_folder=cache_folder, prefix_name=prefix_name, **kwargs)

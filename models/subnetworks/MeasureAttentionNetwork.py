@@ -25,7 +25,7 @@ class MeasureAttentionNetwork(Model):
         # auxiliar layers
         self.distributed_by_query_term = Lambda(lambda x: unstack(x, axis=1), name="Distributed_by_query_term")
         self.concat_snippet_position = Concatenate(name="concat_snippet_position")
-        self.self_attention = MaskedSelfAttention(attention_dim, regularizer=regularizer)
+        self.self_attention = MaskedSelfAttention(attention_dim)
 
         self.add_passage_dimension = Lambda(lambda x: K.expand_dims(x, axis=1), name="add_passage_dimension")
         self.expand_dims_layer = Lambda(lambda x: K.expand_dims(x), name="expand_dims_layer")

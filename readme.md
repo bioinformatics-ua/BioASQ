@@ -1,4 +1,7 @@
-# Generic pipeline for Information Retrieval
+# Generic pipeline for Information Retrieval and BioDeepRank
+NOTE: The information realted to BioDeepRank will be added during the next days...
+The notebook Interaction
+
 
 ## Description
 This repository implements a generic pipeline that can be used to address the majoraty of the IR tasks.
@@ -17,6 +20,8 @@ Each module is dynamicly loaded in runtime, which gives a high degree of freedom
 ![Image of Yaktocat](images/pipe.png)
 
 ## Pipeline configuration file
+
+folder config have multiple examples
 
 (TODO)
 

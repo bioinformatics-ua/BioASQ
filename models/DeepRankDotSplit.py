@@ -19,7 +19,7 @@ import pickle
 import gc
 
 
-class DeepRank(ModelAPI):
+class DeepRankDotSplit(ModelAPI):
     def __init__(self,
                  prefix_name,
                  cache_folder,
@@ -54,8 +54,10 @@ class DeepRank(ModelAPI):
 
         self.cached_preprocess_query_doc = LimitedDict(10000)
 
+        self.split_token = None
+
         # name
-        self.name = "DeepRank_{}_{}_{}".format(self.tokenizer.name_properties, self.embedding.name, config_to_string(self.config))
+        self.name = "DeepRankDotSplit_{}_{}_{}".format(self.tokenizer.name_properties, self.embedding.name, config_to_string(self.config))
 
     def is_trained(self):
         return exists(join(self.cache_folder, self.name))
@@ -94,7 +96,7 @@ class DeepRank(ModelAPI):
                     continue
                 # irrelevant ids
                 irrelevant_ids = (collection_ids-partially_positive_ids)
-                num_irrelevant_ids = 1000  # 5*len(partially_positive_ids)
+                num_irrelevant_ids = 2500  # 5*len(partially_positive_ids)
                 num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
                 irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
@@ -134,7 +136,7 @@ class DeepRank(ModelAPI):
         # clear memory
         del articles
         print("[GC]", gc.collect())
-
+        self.tokenizer.n_process = 2
         log.debug("[DeepRank] before multiprocess tokenization {} == {}".format(len(articles_ids), len(articles_texts)))
         # tokenized_articles = self.tokenizer.tokenizer_multiprocess(articles_texts, mode="articles")
         for i in range(len(articles_texts)):
@@ -234,6 +236,10 @@ class DeepRank(ModelAPI):
         else:
             steps.append("[READY] Tokenizer for the DeepRank")
 
+        # Tokenizer split values
+        self.split_token = self.tokenizer.texts_to_sequences(["."])[0][0]
+        log.info("[DEEPRANK] Split token {}".format(self.split_token))
+
         if not self.embedding.has_matrix():
             steps.append("[MISS] Embedding matrix for the tokenizer")
             if not simulation:
@@ -293,6 +299,8 @@ class DeepRank(ModelAPI):
                         "retrieved": {}
                         }
 
+        self.split_token = self.tokenizer.texts_to_sequences(["."])[0][0]
+
         # lazzy build
         if self.deeprank_model is None:
             if not simulation:
@@ -304,7 +312,6 @@ class DeepRank(ModelAPI):
                 print("LOAD FROM CACHE DeepRank weights")
                 steps.append("[READY] DeepRank weights")
                 if not simulation:
-                    print("LOAD weights", name)
                     load_model_weights(name, self.deeprank_model)
             else:
                 steps.append("[MISS] DeepRank weights")
@@ -396,7 +403,7 @@ class DeepRank(ModelAPI):
         training_generator = self.training_generator(training_data, hyperparameters, train=train, **kwargs)
 
         # sub sample the validation set because to speed up training
-        sub_set_validation_size = int(len(validation_data)*1)
+        sub_set_validation_size = int(len(validation_data)*0.10)
         sub_set_validation = dict(sample(validation_data.items(), sub_set_validation_size))
         # build gold_standard # queries.validation_data_dict
         sub_set_validation_gold_standard = {}
@@ -407,7 +414,7 @@ class DeepRank(ModelAPI):
                 sub_set_validation_gold_standard[key] = queries.validation_data_dict[key]["documents"]
 
         loss = []  # dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
-        map_value = 0
+
         for epoch in range(1, epochs):
             loss_per_epoch = []
             start_epoch_time = time.time()
@@ -437,7 +444,7 @@ class DeepRank(ModelAPI):
             print("", end="\r")
             print(_train_line_info)
 
-            if epoch % 1 == 0:
+            if epoch % 20 == 0:
                 print("Evaluation")
                 # compute validation score!
                 if len(sub_set_validation) > 0:
@@ -446,12 +453,7 @@ class DeepRank(ModelAPI):
                     else:
                         sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
 
-                    _map_value = self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
-
-                    if _map_value > map_value:
-
-                        map_value = _map_value
-                        save_model_weights(join(self.cache_folder, "best_weights_{}.h5".format(self.name)), self.deeprank_model)
+                    self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
 
         if len(validation_data) > 0:
             if "k_fold" in hyperparameters:
@@ -639,7 +641,20 @@ class DeepRank(ModelAPI):
                         higher_index = i+half_size
                         higher_index = min(len(tokenized_article), higher_index)
 
-                        snippets_per_token.append(tokenized_article[lower_index:higher_index])
+                        sentence = []
+
+                        for _i in range(lower_index, higher_index):
+                            token = tokenized_article[_i]
+                            if token == self.split_token:
+                                if _i < i:
+                                    sentence = []
+                                    continue
+                                else:
+                                    break
+
+                            sentence.append(token)
+
+                        snippets_per_token.append(sentence)
                         snippets_per_token_position.append(i)
 
             if len(snippets_per_token) == 0:  # zero pad

@@ -369,7 +369,7 @@ class BaseTokenizer:
 
             for file in files:
                 log.info("[TOKENIZER] Load {}".format(file))
-                loaded_tk = self.__class__.load_from_json(path=os.path.join(merge_tokenizer_path, file))
+                loaded_tk = self.__class__.load_from_json(path=os.path.join(merge_tokenizer_path, file), **self.get_properties())
 
                 # manual merge
                 for w, c in loaded_tk.word_counts.items():
@@ -424,7 +424,7 @@ class BaseTokenizer:
                 return Process(target=tokenizeJob, args=(proc_id, texts, self.__class__, merge_tokenizer_path, self.get_properties(), kwargs))
 
             # multiprocess loop
-            itter = 1000000
+            itter = 100000
             for i, l in enumerate(range(0, len(texts), itter)):
                 process = []
 
