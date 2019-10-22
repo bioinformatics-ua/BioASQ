@@ -35,7 +35,8 @@ class Regex(BaseTokenizer):
 
         self.pattern = re.compile('[^a-zA-Z0-9\s]+')
         self.filter_whitespace = lambda x: not x == ""
-        self.name = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex_"+self.queries_sw+"_"+self.articles_sw
+        self.name = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex"
+        self.name_properties = self.prefix_name + "_" + ("stem_" if self.stem else "")+"Regex_"+str(self.queries_sw)+"_"+str(self.articles_sw)
         print("DEBUG created tokenizer", self.name)
         if self.sw_file is not None:
             with open(self.sw_file, "r") as f:
@@ -45,7 +46,12 @@ class Regex(BaseTokenizer):
         print(self.queries_sw, self.articles_sw)
 
     def get_properties(self):
-        return {"cache_folder": self.cache_folder, "prefix_name": self.prefix_name, "stem": self.stem}
+        return {"cache_folder": self.cache_folder,
+                "prefix_name": self.prefix_name,
+                "stem": self.stem,
+                "queries_sw": self.queries_sw,
+                "articles_sw": self.articles_sw,
+                "sw_file": self.sw_file}
 
     def tokenize_texts(self, texts, **kwargs):
 
@@ -56,9 +62,11 @@ class Regex(BaseTokenizer):
 
         tokenized_texts = self.texts_to_sequences(texts)
         if flag:
-            if self.stop_words is None:  # lazzy initialization
+            if self.stop_words_tokenized is None:  # lazzy initialization
                 self.stop_words_tokenized = set(self.texts_to_sequences([self.stop_words])[0])
-            tokenized_texts = [token for token in tokenized_texts if token not in self.stop_words_tokenized]
+
+            for tokenized_text in tokenized_texts:
+                tokenized_text = [token for token in tokenized_text if token not in self.stop_words_tokenized]
 
         return tokenized_texts
 
@@ -122,9 +130,13 @@ class Regex(BaseTokenizer):
             json.dump(self.get_config(), f)
 
     @staticmethod
-    def load_from_json(path):
+    def load_from_json(path, **kwargs):
         with open(path, "r") as f:
             t_config = json.load(f)
+            # override - TODO change this is stupid this way
+            t_config["queries_sw"] = kwargs["queries_sw"]
+            t_config["articles_sw"] = kwargs["articles_sw"]
+            t_config["sw_file"] = kwargs["sw_file"]
             return Regex(**t_config)
 
     @staticmethod
@@ -135,6 +147,6 @@ class Regex(BaseTokenizer):
         path = join(cache_folder, name)
         if exists(path):
             print("[LOAD FROM CACHE] Load tokenizer from", path)
-            return Regex.load_from_json(path)
+            return Regex.load_from_json(path, **kwargs)
 
         return Regex(stem, cache_folder=cache_folder, prefix_name=prefix_name, **kwargs)

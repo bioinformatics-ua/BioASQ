@@ -55,7 +55,7 @@ class DeepRank(ModelAPI):
         self.cached_preprocess_query_doc = LimitedDict(10000)
 
         # name
-        self.name = "DeepRank_{}_{}_{}".format(self.tokenizer.name, self.embedding.name, config_to_string(self.config))
+        self.name = "DeepRank_{}_{}_{}".format(self.tokenizer.name_properties, self.embedding.name, config_to_string(self.config))
 
     def is_trained(self):
         return exists(join(self.cache_folder, self.name))
@@ -64,7 +64,7 @@ class DeepRank(ModelAPI):
         return exists(self.__training_data_file_name(**kwargs))
 
     def __training_data_file_name(self, origin, **kwargs):
-        return join(self.cache_folder, "O{}_T{}_cache_traing_data.p".format(origin, self.tokenizer.name))
+        return join(self.cache_folder, "O{}_T{}_cache_traing_data.p".format(origin, self.tokenizer.name_properties))
 
     def prepare_training_data(self, corpora, queries, retrieved, **kwargs):
 
@@ -79,7 +79,7 @@ class DeepRank(ModelAPI):
         training_data = {}
         print("[DeepRank] Prepare the training data")
         # select irrelevant and particly irrelevant articles
-        DEBUG_JUMP = False
+        DEBUG_JUMP = True
         if not DEBUG_JUMP:
             for i, items in enumerate(queries.train_data_dict.items()):
 
@@ -94,7 +94,7 @@ class DeepRank(ModelAPI):
                     continue
                 # irrelevant ids
                 irrelevant_ids = (collection_ids-partially_positive_ids)
-                num_irrelevant_ids = 2500  # 5*len(partially_positive_ids)
+                num_irrelevant_ids = 1000  # 5*len(partially_positive_ids)
                 num_irrelevant_ids = min(len(irrelevant_ids), num_irrelevant_ids)
                 irrelevant_ids = sample(list(irrelevant_ids), num_irrelevant_ids)
 
@@ -103,11 +103,16 @@ class DeepRank(ModelAPI):
                                            "irrelevant_ids": list(irrelevant_ids),
                                            "query": self.tokenizer.tokenize_query(query_data["query"])}
 
-        # manual load checkpoint
-        # SAVE
-        print("SAVE CHECK POINT")
-        with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "wb") as f:
-            pickle.dump(training_data, f)
+            # manual load checkpoint
+            # SAVE
+            print("SAVE CHECK POINT")
+            with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "wb") as f:
+                pickle.dump(training_data, f)
+        else:
+            print("LOAD CHECK POINT")
+            with open(join(self.cache_folder, "prepere_data_checkpoint.p"), "rb") as f:
+                training_data = pickle.load(f)
+
 
         # total ids
         used_articles_ids = set()
@@ -131,7 +136,12 @@ class DeepRank(ModelAPI):
         print("[GC]", gc.collect())
 
         log.debug("[DeepRank] before multiprocess tokenization {} == {}".format(len(articles_ids), len(articles_texts)))
-        tokenized_articles = self.tokenizer.tokenizer_multiprocess(articles_texts, mode="articles")
+        # tokenized_articles = self.tokenizer.tokenizer_multiprocess(articles_texts, mode="articles")
+        for i in range(len(articles_texts)):
+            articles_texts[i] = self.tokenizer.tokenize_article(articles_texts[i])
+            if i%100000 == 0:
+                log.info("article t {}".format(i))
+        tokenized_articles = articles_texts
         log.debug("[DeepRank] after multiprocess tokenization {} == {}".format(len(articles_ids), len(tokenized_articles)))
         tokenized_articles = dict(zip(articles_ids, tokenized_articles))
         log.debug("[DeepRank] {} == {}".format(len(articles_ids), len(tokenized_articles)))
@@ -294,6 +304,7 @@ class DeepRank(ModelAPI):
                 print("LOAD FROM CACHE DeepRank weights")
                 steps.append("[READY] DeepRank weights")
                 if not simulation:
+                    print("LOAD weights", name)
                     load_model_weights(name, self.deeprank_model)
             else:
                 steps.append("[MISS] DeepRank weights")
@@ -351,10 +362,10 @@ class DeepRank(ModelAPI):
         for _e, i in enumerate(range(k_fold)):
             print("[DEEPRANK] LOAD FOLD", _e)
 
-            with open(str(_e)+"_validation_fold.p", "rb") as f:
+            with open(str(_e)+"_validation_pubmed_2018_fold.p", "rb") as f:
                 validation_keys = pickle.load(f)
 
-            with open(str(_e)+"_train_fold.p", "rb") as f:
+            with open(str(_e)+"_train_pubmed_2018_fold.p", "rb") as f:
                 train_keys = pickle.load(f)
 
             k_fold_train_data = {"train": {key: training_data["train"][key] for key in train_keys}, "articles": training_data["articles"]}
@@ -385,7 +396,7 @@ class DeepRank(ModelAPI):
         training_generator = self.training_generator(training_data, hyperparameters, train=train, **kwargs)
 
         # sub sample the validation set because to speed up training
-        sub_set_validation_size = int(len(validation_data)*0.10)
+        sub_set_validation_size = int(len(validation_data)*1)
         sub_set_validation = dict(sample(validation_data.items(), sub_set_validation_size))
         # build gold_standard # queries.validation_data_dict
         sub_set_validation_gold_standard = {}
@@ -396,7 +407,7 @@ class DeepRank(ModelAPI):
                 sub_set_validation_gold_standard[key] = queries.validation_data_dict[key]["documents"]
 
         loss = []  # dict(map(lambda x: (x["query_id"], x["documents"]), queries.validation_data))
-
+        map_value = 0
         for epoch in range(1, epochs):
             loss_per_epoch = []
             start_epoch_time = time.time()
@@ -426,7 +437,7 @@ class DeepRank(ModelAPI):
             print("", end="\r")
             print(_train_line_info)
 
-            if epoch % 20 == 0:
+            if epoch % 1 == 0:
                 print("Evaluation")
                 # compute validation score!
                 if len(sub_set_validation) > 0:
@@ -435,7 +446,12 @@ class DeepRank(ModelAPI):
                     else:
                         sub_set_validation_scores = self.inference(data_to_infer=sub_set_validation, train=True, **kwargs)["retrieved"]
 
-                        self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
+                    _map_value = self.show_evaluation(sub_set_validation_scores, sub_set_validation_gold_standard)
+
+                    if _map_value > map_value:
+
+                        map_value = _map_value
+                        save_model_weights(join(self.cache_folder, "best_weights_{}.h5".format(self.name)), self.deeprank_model)
 
         if len(validation_data) > 0:
             if "k_fold" in hyperparameters:
