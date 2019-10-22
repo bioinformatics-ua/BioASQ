@@ -2,7 +2,7 @@ Repository with code for the article: ...
 
 Both BioDeepRank and Attn-BioDeepRank are implemented in tensorflow with keras and can be easily configured by a yaml FILE.
 
-To see how to use both models individually check the Interaction Models notebook.
+## To see how to use both models individually check the Interaction Models notebook.
 
 ### THE SOURCE CODE FOR BOTH MODELS ARE IN THE FOLDER: models/(DeepRank) and models/subnetworks
 
@@ -98,7 +98,7 @@ python3 main.py config_example.yaml --query "test query?"
 
 ## Requirments
 
-ELASTIC SEARCH SHOULD BE ALSO CONFIGURED, outherwise it can be seekped by removing it from the pipeline
+ELASTIC SEARCH SHOULD BE ALSO CONFIGURED, outherwise it can be skipped by removing it from the pipeline
 
 For using the current pipeline is espected that the corpora is compressed and each file shuld be a .json with following format:
 ```json
