@@ -1,6 +1,14 @@
-# Generic pipeline for Information Retrieval and BioDeepRank
-NOTE: The information realted to BioDeepRank will be added during the next days...
-The notebook Interaction Models shows how to initializate the BioDeepRank instance and the code is in the models folder
+Repository with code for the article: ...
+
+Both BioDeepRank and Attn-BioDeepRank are implemented in tensorflow with keras and can be easily configured by a yaml FILE.
+
+To see how to use both models individually check the Interaction Models notebook.
+
+The complete system's training and inference are based on a pipeline based architecture and the entry point is the main.py file.
+
+Disclaimer: All code on this repository is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
+
+## Generic pipeline for Information Retrieval and BioDeepRank
 
 
 ## Description
@@ -32,7 +40,8 @@ corpora:
     folder: "path/to/folder.tar.gz" #corresponds to the tar.gz file
     files_are_compressed: true #(optinal) default is false
 queries:
-    folder: "path/to/folder"
+    train_file: "path/to/train_set.json"
+    validation_file: "path/to/validation_set.json"
 pipeline:
     - BM25:
         top_k: 2500
@@ -59,9 +68,65 @@ pipeline:
 
 ```
 
+Quick explanation, the cache_folder is a backup folder used to save every repetitive process during the pipeline, for example, tokenization, BM25 index etc...
+Every model generates a unique name based on their properties, so if a file with the same name is found this will be loaded instead of been created.
+
+
+
 ## Run
 Train
 ```sh
 python3 main.py config_example.yaml
 
 ```
+
+if config_example has a property "k_fold:N" it will do N cross validation using the queries from the training file. During this process N trained models are saved.
+
+Inference over a file
+```sh
+python3 main.py config_example.yaml --queries path/to/file
+
+```
+
+Inference over a single query
+```sh
+python3 main.py config_example.yaml --query "test query?"
+
+```
+
+## Requirments
+
+ELASTIC SEARCH SHOULD BE ALSO CONFIGURED, outherwise it can be seekped by removing it from the pipeline
+
+For using the current pipeline is espected that the corpora is compressed and each file shuld be a .json with following format:
+```json
+[
+  {
+    "id": "<str>",
+    "title": "<str>",
+    "abstract": "<str>"
+  },
+  ...
+]
+```
+The compressed file can have multiple json files.
+
+For the training and validation date is expected to be in the follwing format:
+```json
+[
+  {
+    "query_id": "<str>",
+    "query": "<str>",
+    "documents": ["<str>","<str>","<str>",...]
+  },
+  ...
+]
+```
+
+The embeddings can be download from here https://github.com/ncbi-nlp/BioSentVec
+
+## Advanced details to individually use BioDeepRank and Attn-DeepRank
+
+check Intecation Models
+
+Data to fed to the model: TODO
