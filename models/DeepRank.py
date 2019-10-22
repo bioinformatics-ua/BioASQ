@@ -362,10 +362,10 @@ class DeepRank(ModelAPI):
         for _e, i in enumerate(range(k_fold)):
             print("[DEEPRANK] LOAD FOLD", _e)
 
-            with open(str(_e)+"_validation_pubmed_2018_fold.p", "rb") as f:
+            with open(str(_e)+"_validation_"+self.prefix_name+"_fold.p", "rb") as f:
                 validation_keys = pickle.load(f)
 
-            with open(str(_e)+"_train_pubmed_2018_fold.p", "rb") as f:
+            with open(str(_e)+"_train_"+self.prefix_name+"_fold.p", "rb") as f:
                 train_keys = pickle.load(f)
 
             k_fold_train_data = {"train": {key: training_data["train"][key] for key in train_keys}, "articles": training_data["articles"]}
@@ -437,7 +437,7 @@ class DeepRank(ModelAPI):
             print("", end="\r")
             print(_train_line_info)
 
-            if epoch % 1 == 0:
+            if epoch % 2 == 0:
                 print("Evaluation")
                 # compute validation score!
                 if len(sub_set_validation) > 0:
