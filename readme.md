@@ -4,7 +4,7 @@ Both BioDeepRank and Attn-BioDeepRank are implemented in tensorflow with keras a
 
 To see how to use both models individually check the Interaction Models notebook.
 
-The complete system's training and inference are based on a pipeline based architecture and the entry point is the main.py file.
+The complete system's training and inference are based on a pipeline and the entry point is the main.py file.
 
 Disclaimer: All code on this repository is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
 
@@ -68,7 +68,7 @@ pipeline:
 
 ```
 
-Quick explanation, the cache_folder is a backup folder used to save every repetitive process during the pipeline, for example, tokenization, BM25 index etc...
+Quick explanation, the cache_folder is a backup folder used to save every repetitive process during the pipeline, for example, tokenization, BM25 index, model weights etc...
 Every model generates a unique name based on their properties, so if a file with the same name is found this will be loaded instead of been created.
 
 
@@ -124,6 +124,18 @@ For the training and validation date is expected to be in the follwing format:
 ```
 
 The embeddings can be download from here https://github.com/ncbi-nlp/BioSentVec
+
+
+## Models weights
+
+These weight files shloud be copy to the cache_folder directory, to be altomaticly load by model when instatiated by the yaml file.
+
+config/BioDeepRank_6b.yaml -> link
+config/BioDeepRank_7b.yaml -> link
+config/Attn-BioDeepRank_6b.yaml -> link
+config/Attn-BioDeepRank_7b.yaml -> link
+
+The embedding matrix was included as part of the models weights, so the resulting file has +/- 6gb.
 
 ## Advanced details to individually use BioDeepRank and Attn-DeepRank
 
