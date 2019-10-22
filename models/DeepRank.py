@@ -79,7 +79,7 @@ class DeepRank(ModelAPI):
         training_data = {}
         print("[DeepRank] Prepare the training data")
         # select irrelevant and particly irrelevant articles
-        DEBUG_JUMP = True
+        DEBUG_JUMP = False
         if not DEBUG_JUMP:
             for i, items in enumerate(queries.train_data_dict.items()):
 
