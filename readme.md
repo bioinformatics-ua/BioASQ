@@ -4,6 +4,8 @@ Both BioDeepRank and Attn-BioDeepRank are implemented in tensorflow with keras a
 
 To see how to use both models individually check the Interaction Models notebook.
 
+THE SOURCE CODE FOR BOTH MODELS ARE IN THE FOLDER: models/(DeepRank) and models/subnetworks
+
 The complete system's training and inference are based on a pipeline and the entry point is the main.py file.
 
 Disclaimer: All code on this repository is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY
