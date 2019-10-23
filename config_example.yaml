@@ -10,7 +10,7 @@ queries:
 pipeline:
     - BM25_ES:
         top_k: 2500
-        address: "http://193.136.175.98:8125"
+        address: "<ip:port>"
         tokenizer:
             Regex:
                 n_process: 20

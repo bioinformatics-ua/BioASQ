@@ -2,7 +2,7 @@ Repository with code for the article: ...
 
 Both BioDeepRank and Attn-BioDeepRank are implemented in tensorflow with keras and can be easily configured by a yaml FILE.
 
-To see how to use both models individually check the Interaction Models notebook.
+## To see how to use both models individually check the Interaction Models notebook.
 
 ### THE SOURCE CODE FOR BOTH MODELS ARE IN THE FOLDER: models/(DeepRank) and models/subnetworks
 
@@ -96,9 +96,9 @@ python3 main.py config_example.yaml --query "test query?"
 
 ```
 
-## Requirments
+## Requirements
 
-ELASTIC SEARCH SHOULD BE ALSO CONFIGURED, outherwise it can be seekped by removing it from the pipeline
+ELASTIC SEARCH SHOULD BE ALSO CONFIGURED, outherwise it can be skipped by removing it from the pipeline
 
 For using the current pipeline is espected that the corpora is compressed and each file shuld be a .json with following format:
 ```json
@@ -113,7 +113,7 @@ For using the current pipeline is espected that the corpora is compressed and ea
 ```
 The compressed file can have multiple json files.
 
-For the training and validation date is expected to be in the follwing format:
+For the training and validation the data is expected to be in the follwing format:
 ```json
 [
   {
@@ -130,17 +130,18 @@ The embeddings can be download from here https://github.com/ncbi-nlp/BioSentVec
 
 ## Models weights
 
-These weight files shloud be copy to the cache_folder directory, to be altomaticly load by model when instatiated by the yaml file.
+These weight files should be copy to the cache_folder directory, to be automatically loaded by the model when instatiated.
 
 config/BioDeepRank_6b.yaml -> link
+
 config/BioDeepRank_7b.yaml -> link
+
 config/Attn-BioDeepRank_6b.yaml -> link
+
 config/Attn-BioDeepRank_7b.yaml -> link
 
 The embedding matrix was included as part of the models weights, so the resulting file has +/- 6gb.
 
 ## Advanced details to individually use BioDeepRank and Attn-DeepRank
 
-check Intecation Models
-
-Data to fed to the model: TODO
+check the "Intecation Models" notebook, it has some various use cases.
