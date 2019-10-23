@@ -96,7 +96,7 @@ python3 main.py config_example.yaml --query "test query?"
 
 ```
 
-## Requirments
+## Requirements
 
 ELASTIC SEARCH SHOULD BE ALSO CONFIGURED, outherwise it can be skipped by removing it from the pipeline
 
@@ -133,8 +133,11 @@ The embeddings can be download from here https://github.com/ncbi-nlp/BioSentVec
 These weight files should be copy to the cache_folder directory, to be automatically loaded by the model when instatiated.
 
 config/BioDeepRank_6b.yaml -> link
+
 config/BioDeepRank_7b.yaml -> link
+
 config/Attn-BioDeepRank_6b.yaml -> link
+
 config/Attn-BioDeepRank_7b.yaml -> link
 
 The embedding matrix was included as part of the models weights, so the resulting file has +/- 6gb.
