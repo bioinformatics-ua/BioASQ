@@ -138,7 +138,7 @@ config/BioDeepRank_7b.yaml -> link
 
 config/Attn-BioDeepRank_6b.yaml -> link
 
-config/Attn-BioDeepRank_7b.yaml -> link
+config/Attn-BioDeepRank_7b.yaml -> https://tinyurl.com/rc8ejoe
 
 The embedding matrix was included as part of the models weights, so the resulting file has +/- 6gb.
 
