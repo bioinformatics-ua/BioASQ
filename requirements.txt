@@ -5,7 +5,7 @@ elasticsearch==7.0.2
 fasttext==0.9.1
 jupyter==1.0.0
 lesscpy==0.13.0
-lxml==4.3.1
+lxml==4.6.5
 matplotlib==2.2.2
 nltk==3.3
 notebook==5.7.4
